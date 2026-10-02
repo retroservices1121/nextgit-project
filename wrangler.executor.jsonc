@@ -38,5 +38,8 @@
       "binding": "ARTIFACTS",
       "namespace": "nextgit"
     }
-  ]
+  ],
+  "vars": {
+    "AGENT_MODEL": "openai/gpt-5.2"
+  }
 }
