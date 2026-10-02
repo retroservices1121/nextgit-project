@@ -2,19 +2,36 @@ export interface ArtifactRepoInfo {
   id?: string;
   name?: string;
   remote?: string;
-  default_branch?: string;
+  defaultBranch?: string;
+}
+
+export interface ArtifactRepoCapability {
+  info(): Promise<ArtifactRepoInfo | null>;
+  fork?(params: {
+    target: {
+      name: string;
+      opts?: { description?: string; readOnly?: boolean };
+    };
+    defaultBranchOnly?: boolean;
+  }): Promise<ArtifactCreateResult>;
 }
 
 export interface ArtifactRepoHandle {
-  repo: {
-    info(): Promise<ArtifactRepoInfo | null>;
-    fork?(name: string): Promise<ArtifactRepoHandle>;
-  };
+  repo: ArtifactRepoCapability;
+}
+
+export interface ArtifactCreateResult {
+  name: string;
+  remote?: string;
+  repo: ArtifactRepoCapability;
 }
 
 export interface ArtifactsBinding {
-  create(name: string): Promise<ArtifactRepoHandle>;
-  get?(name: string): Promise<ArtifactRepoHandle>;
+  create(
+    name: string,
+    opts?: { description?: string; readOnly?: boolean; defaultBranch?: string },
+  ): Promise<ArtifactCreateResult>;
+  get(name: string): Promise<ArtifactRepoHandle>;
 }
 
 export interface AttemptRepository {
@@ -34,9 +51,12 @@ export class ArtifactsRepositoryService {
 
   async createCanonicalProject(projectId: string): Promise<AttemptRepository> {
     const name = normalize(`project-${projectId}`);
-    const created = await this.artifacts.create(name);
-    const info = await created.repo.info();
-    return { name, remote: info?.remote };
+    const created = await this.artifacts.create(name, {
+      description: "Canonical project repository",
+      readOnly: false,
+      defaultBranch: "main",
+    });
+    return { name: created.name ?? name, remote: created.remote };
   }
 
   async createAttempt(
@@ -44,18 +64,23 @@ export class ArtifactsRepositoryService {
     missionId: string,
     agentId: string,
   ): Promise<AttemptRepository> {
-    if (!this.artifacts.get) {
-      throw new Error("Artifacts binding does not expose repository lookup.");
-    }
-
     const source = await this.artifacts.get(canonicalRepositoryName);
     if (!source.repo.fork) {
       throw new Error("Artifacts repository does not expose fork().");
     }
 
     const name = normalize(`attempt-${missionId}-${agentId}`);
-    const fork = await source.repo.fork(name);
-    const info = await fork.repo.info();
-    return { name, remote: info?.remote };
+    const fork = await source.repo.fork({
+      target: {
+        name,
+        opts: {
+          description: `Isolated Mission attempt for ${agentId}`,
+          readOnly: false,
+        },
+      },
+      defaultBranchOnly: true,
+    });
+
+    return { name: fork.name ?? name, remote: fork.remote };
   }
 }
