@@ -271,6 +271,20 @@ function revise(id){const f=prompt('What should this agent revise?');if(f)decide
       }
 
       try {
+        if (body.decision === "accept") {
+          const repositoryName = body.missionId === "competition-demo"
+            ? (body.attemptId === "competition-demo-alpha" ? "attempt-competition-demo-alpha" : body.attemptId === "competition-demo-beta" ? "attempt-competition-demo-beta" : undefined)
+            : undefined;
+          if (!repositoryName) return reply({ error: "Acceptance requires a resolvable Attempt repository and a fresh Security Agent pass." }, 409);
+          const scan = await env.EXECUTOR.fetch("https://executor/security-scan", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ repositoryName }),
+          });
+          const security = await scan.json() as any;
+          if (!scan.ok || security?.passed !== true) return reply({ error: "Attempt blocked by Security Agent.", security }, 409);
+        }
+
         const decision = new DecisionService().decide({
           missionId: body.missionId,
           attemptId: body.attemptId,
