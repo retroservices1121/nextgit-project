@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["src/executor/**/*.ts"],
+  "exclude": [
+    "src/index.ts",
+    "src/api.ts",
+    "src/application/**/*",
+    "src/runtime/**/*",
+    "src/agents/**/*"
+  ]
+}
