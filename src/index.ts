@@ -79,7 +79,7 @@ export default {
       const results = await Promise.all(
         attempts.map(async (attempt) => {
           try {
-            const response = await fetch("https://nextgit-executor.retro-b22.workers.dev/execute-attempt", {
+            const response = await env.EXECUTOR.fetch("https://executor/execute-attempt", {
               method: "POST",
               headers: { "content-type": "application/json" },
               body: JSON.stringify({
@@ -137,7 +137,7 @@ export default {
       const results = await Promise.all(
         body.attempts.map(async (attempt) => {
           try {
-            const response = await fetch("https://nextgit-executor.retro-b22.workers.dev/execute-attempt", {
+            const response = await env.EXECUTOR.fetch("https://executor/execute-attempt", {
               method: "POST",
               headers: { "content-type": "application/json" },
               body: JSON.stringify({
