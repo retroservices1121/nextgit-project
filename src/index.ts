@@ -283,47 +283,29 @@ function revise(id){const f=prompt('What should this agent revise?');if(f)decide
       }
 
       try {
+        const stored = await env.STATE.get(`attempt:${body.attemptId}`, "json") as { missionId: string; canonicalRepositoryName: string; repositoryName: string } | null;
+        const demo = body.missionId === "competition-demo" ? {
+          missionId: "competition-demo",
+          canonicalRepositoryName: "nextgit-source",
+          repositoryName: body.attemptId === "competition-demo-alpha" ? "attempt-competition-demo-alpha" : body.attemptId === "competition-demo-beta" ? "attempt-competition-demo-beta" : "",
+        } : null;
+        const attempt = stored ?? demo;
+        if (!attempt || !attempt.repositoryName || attempt.missionId !== body.missionId) return reply({ error: "Attempt does not belong to this Mission or cannot be resolved." }, 404);
+
         if (body.decision === "accept") {
-          const repositoryName = body.missionId === "competition-demo"
-            ? (body.attemptId === "competition-demo-alpha" ? "attempt-competition-demo-alpha" : body.attemptId === "competition-demo-beta" ? "attempt-competition-demo-beta" : undefined)
-            : undefined;
-          if (!repositoryName) return reply({ error: "Acceptance requires a resolvable Attempt repository and a fresh Security Agent pass." }, 409);
-          const scan = await env.EXECUTOR.fetch("https://executor/security-scan", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ repositoryName }),
-          });
+          const scan = await env.EXECUTOR.fetch("https://executor/security-scan", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ repositoryName: attempt.repositoryName }) });
           const security = await scan.json() as any;
           if (!scan.ok || security?.passed !== true) return reply({ error: "Attempt blocked by Security Agent.", security }, 409);
         }
 
-        const decision = new DecisionService().decide({
-          missionId: body.missionId,
-          attemptId: body.attemptId,
-          decision: body.decision,
-          feedback: body.feedback,
-        });
+        const decision = new DecisionService().decide({ missionId: body.missionId, attemptId: body.attemptId, decision: body.decision, feedback: body.feedback });
+        await env.STATE.put(`decision:${body.missionId}:${body.attemptId}`, JSON.stringify(decision));
 
-        if (body.decision === "accept" && body.missionId === "competition-demo") {
-          const repositoryName = body.attemptId === "competition-demo-alpha"
-            ? "attempt-competition-demo-alpha"
-            : body.attemptId === "competition-demo-beta"
-              ? "attempt-competition-demo-beta"
-              : undefined;
-
-          if (repositoryName) {
-            const promote = await env.EXECUTOR.fetch("https://executor/promote", {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({
-                sourceRepository: repositoryName,
-                targetRepository: "nextgit-source",
-                decisionId: decision.id,
-              }),
-            });
-            const promotion = await promote.json();
-            return reply({ ok: promote.ok, decision, promotion }, promote.ok ? 201 : 502);
-          }
+        if (body.decision === "accept") {
+          const promote = await env.EXECUTOR.fetch("https://executor/promote", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sourceRepository: attempt.repositoryName, targetRepository: attempt.canonicalRepositoryName, decisionId: decision.id }) });
+          const promotion = await promote.json();
+          if (promote.ok) await env.STATE.put(`mission-decision:${body.missionId}`, JSON.stringify({ acceptedAttemptId: body.attemptId, decidedAt: decision.decidedAt }));
+          return reply({ ok: promote.ok, decision, promotion }, promote.ok ? 201 : 502);
         }
 
         return reply({ ok: true, decision }, 201);
