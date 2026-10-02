@@ -228,6 +228,29 @@ function revise(id){const feedback=prompt('What should this agent revise?');if(f
           decision: body.decision,
           feedback: body.feedback,
         });
+
+        if (body.decision === "accept" && body.missionId === "competition-demo") {
+          const repositoryName = body.attemptId === "competition-demo-alpha"
+            ? "attempt-competition-demo-alpha"
+            : body.attemptId === "competition-demo-beta"
+              ? "attempt-competition-demo-beta"
+              : undefined;
+
+          if (repositoryName) {
+            const promote = await env.EXECUTOR.fetch("https://executor/promote", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                sourceRepository: repositoryName,
+                targetRepository: "nextgit-source",
+                decisionId: decision.id,
+              }),
+            });
+            const promotion = await promote.json();
+            return reply({ ok: promote.ok, decision, promotion }, promote.ok ? 201 : 502);
+          }
+        }
+
         return reply({ ok: true, decision }, 201);
       } catch (error) {
         return reply({ error: error instanceof Error ? error.message : "Decision failed" }, 400);
