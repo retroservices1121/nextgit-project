@@ -496,6 +496,13 @@ function revise(id){const f=prompt('What should this agent revise?');if(f)decide
       if (!body.missionId || !body.objective || !body.attempts?.length) {
         return reply({ error: "missionId, objective, and attempts are required" }, 400);
       }
+      const user = await currentUser(request, env.DB);
+      if (!user) return reply({ error: "Sign in is required" }, 401);
+      const missionRow = await env.DB.prepare("SELECT m.id,m.project_id FROM missions m JOIN projects p ON p.id=m.project_id LEFT JOIN project_members pm ON pm.project_id=p.id AND pm.user_id=? WHERE m.id=? AND (p.owner_user_id=? OR (pm.user_id=? AND pm.role IN ('owner','editor')))").bind(user.id,body.missionId,user.id,user.id).first<any>();
+      if (!missionRow) return reply({ error: "Mission not found or build access denied" }, 403);
+      const storedMission = await env.STATE.get(`mission:${body.missionId}`, "json") as any;
+      const allowedAttempts = new Map((storedMission?.attempts || []).map((a:any) => [a.id, a.repository?.name]));
+      if (body.attempts.some((a:any) => allowedAttempts.get(a.id) !== a.repositoryName)) return reply({ error: "One or more workspaces do not belong to this Mission" }, 403);
 
       const runId = crypto.randomUUID();
       const storedPlan = await env.STATE.get(`plan:${body.missionId}`, "json") as any;
