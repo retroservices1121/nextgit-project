@@ -5,6 +5,7 @@ import { MissionOrchestrator } from "./application/mission-orchestrator";
 export interface Env {
   ARTIFACTS: ArtifactsBinding;
   EXECUTOR: Fetcher;
+  STATE: KVNamespace;
 }
 
 export async function createProject(env: Env, name: string, sourceUrl?: string, branch?: string) {
