@@ -27,8 +27,7 @@ export default {
             repository: info.name ?? "nextgit-source",
             remoteConfigured: Boolean(info.remote),
           },
-          sandbox: Boolean(env.Sandbox),
-          modelConfigured: Boolean(env.AGENT_MODEL),
+          executionPlane: "nextgit-executor",
         });
       } catch (error) {
         return reply({
@@ -59,23 +58,6 @@ export default {
         objective: body.objective,
         agentIds: body.agentIds?.length ? body.agentIds : ["agent-a", "agent-b"],
       }), 201);
-    }
-
-    if (request.method === "GET" && url.pathname === "/api/e2e-run") {
-      try {
-        const result = await executeAttempt(env, {
-          attemptId: "e2e-a",
-          repositoryName: "e2e-attempt-a",
-          objective: "Create a file named E2E_AGENT_PROOF.md containing a short explanation that this file was created by an isolated implementation agent during the NextGit end-to-end test. Do not modify any other file.",
-          agentId: "agent-a",
-        });
-        return reply({ ok: true, result }, 200);
-      } catch (error) {
-        return reply({
-          ok: false,
-          error: error instanceof Error ? error.message : "E2E execution failed",
-        }, 500);
-      }
     }
 
     if (request.method === "POST" && url.pathname === "/api/decisions") {
