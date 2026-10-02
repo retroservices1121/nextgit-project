@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/index.ts",
+    "src/domain.ts",
+    "src/api.ts",
+    "src/application/**/*.ts",
+    "src/infrastructure/**/*.ts",
+    "src/security/**/*.ts",
+    "src/agents/**/*.ts",
+    "src/runtime/**/*.ts"
+  ],
+  "exclude": ["src/executor/**/*"]
+}
