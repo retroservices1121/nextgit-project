@@ -67,11 +67,11 @@ export default {
       const results = await Promise.all(attempts.map(async (attempt) => {
         const repo = await env.ARTIFACTS.get(attempt.repositoryName);
         const info = await repo.info();
-        const file = await repo.readFile?.("main", attempt.path).catch?.(() => undefined);
+        const file = await repo.readFile({ ref: "main", path: attempt.path });
         return {
           ...attempt,
           remoteConfigured: Boolean(info.remote),
-          content: typeof file === "string" ? file : undefined,
+          content: file ? await file.text() : undefined,
         };
       }));
 
