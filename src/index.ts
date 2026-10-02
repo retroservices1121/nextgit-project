@@ -2,6 +2,7 @@ import { ArtifactsRepositoryService } from "./infrastructure/artifacts";
 import { createMission, createProject, type Env } from "./api";
 import { DecisionService, type DecisionKind } from "./application/decision-service";
 import { MissionPlanner } from "./application/mission-planner";
+import { projectPage } from "./ui/project-page";
 
 const reply = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data, null, 2), {
@@ -155,25 +156,7 @@ export default {
     }
 
     if (request.method === "GET" && url.pathname === "/project") {
-      const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NextGit — Project</title>
-<style>body{font-family:ui-sans-serif,system-ui;background:#0b0d10;color:#f5f7fa;margin:0}main{max-width:1050px;margin:auto;padding:32px 20px}.brand{color:#8b9cff;font-weight:800}.tabs{display:flex;gap:8px;margin:24px 0;border-bottom:1px solid #293041}.tab{padding:10px 12px;cursor:pointer;color:#9ca3af}.tab.active{color:#fff;border-bottom:2px solid #8b9cff}.panel{background:#151922;border:1px solid #293041;border-radius:16px;padding:20px}.file{display:flex;justify-content:space-between;padding:11px 8px;border-bottom:1px solid #242b38;cursor:pointer}.file:hover{background:#1a1f29}.muted{color:#8e98a8}.code{white-space:pre-wrap;background:#0d1117;padding:16px;border-radius:10px;overflow:auto;font:12px ui-monospace,monospace}.hidden{display:none}button{background:#252b36;color:#fff;border:0;border-radius:8px;padding:9px 12px;cursor:pointer}a{color:#aeb9ff}</style></head>
-<body><main><div class="brand">NEXTGIT</div><h1 id="name">Your project</h1><p class="muted" id="health">Your code lives here. NextGit keeps the history for you.</p>
-<div class="tabs"><div class="tab active" onclick="show('overview',this)">Overview</div><div class="tab" onclick="show('files',this)">Files</div><div class="tab" onclick="show('updates',this)">Updates</div><div class="tab" onclick="location.href='/'">Build</div></div>
-<section id="overview" class="panel"><h2>Project overview</h2><p>This is the current version of your project. You can browse what is inside, see previous updates, or tell NextGit what you want to build next.</p><button onclick="showByName('files')">Browse project files</button></section>
-<section id="files" class="panel hidden"><h2>Files</h2><p class="muted">These are the files that make up your project.</p><div id="fileList">Loading…</div><div id="viewer" class="hidden"><p><button onclick="closeFile()">← Back to files</button></p><h3 id="fileName"></h3><pre class="code" id="fileContent"></pre></div></section>
-<section id="updates" class="panel hidden"><h2>Updates</h2><p class="muted">A history of changes made to your project.</p><div id="history">Loading…</div></section>
-</main><script>
-const saved=JSON.parse(sessionStorage.getItem('nextgit:lastMission')||'null');const repo=saved?.project?.canonicalRepositoryId;document.getElementById('name').textContent=saved?.project?.name||'Your project';
-function show(id,el){document.querySelectorAll('section.panel').forEach(x=>x.classList.add('hidden'));document.getElementById(id).classList.remove('hidden');document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));if(el)el.classList.add('active');if(id==='files')loadFiles();if(id==='updates')loadHistory()}
-function showByName(id){show(id,[...document.querySelectorAll('.tab')].find(x=>x.textContent.toLowerCase()===id))}
-let currentPath='';let treeStack=[];
-async function loadFiles(treeHash,path){if(!repo){document.getElementById('fileList').textContent='No project selected.';return}const q='/api/project/files?repository='+encodeURIComponent(repo)+(treeHash?'&tree='+encodeURIComponent(treeHash):'');const d=await fetch(q).then(r=>r.json());const entries=d.files||[];currentPath=path||'';let html=currentPath?'<div class="file" onclick="goUp()"><span>← Back</span><span class="muted">'+currentPath+'</span></div>':'';html+=entries.map(x=>{const name=String(x.name||x.path||'');const full=currentPath?currentPath+'/'+name:name;const isTree=x.type==='tree';return '<div class="file" data-name="'+encodeURIComponent(name)+'" data-path="'+encodeURIComponent(full)+'" data-hash="'+encodeURIComponent(x.hash||'')+'" data-tree="'+(isTree?'1':'0')+'"><span>'+(isTree?'📁 ':'📄 ')+name+'</span><span class="muted">'+(isTree?'Folder':'File')+'</span></div>'}).join('');document.getElementById('fileList').innerHTML=html||'This project does not have files yet.';document.querySelectorAll('#fileList .file[data-name]').forEach(el=>el.onclick=()=>{if(el.dataset.tree==='1'){treeStack.push({hash:d.treeHash,path:currentPath});loadFiles(decodeURIComponent(el.dataset.hash),decodeURIComponent(el.dataset.path))}else openFile(decodeURIComponent(el.dataset.path))})}
-function goUp(){const prev=treeStack.pop();if(prev)loadFiles(prev.hash,prev.path);else loadFiles()}
-async function openFile(path){const d=await fetch('/api/project/file?repository='+encodeURIComponent(repo)+'&path='+encodeURIComponent(path)).then(r=>r.json());document.getElementById('fileList').classList.add('hidden');document.getElementById('viewer').classList.remove('hidden');document.getElementById('fileName').textContent=path;document.getElementById('fileContent').textContent=d.binary?'This file cannot be previewed as text.':(d.content||'')}
-function closeFile(){document.getElementById('viewer').classList.add('hidden');document.getElementById('fileList').classList.remove('hidden')}
-async function loadHistory(){if(!repo){document.getElementById('history').textContent='No project selected.';return}const d=await fetch('/api/project/history?repository='+encodeURIComponent(repo)).then(r=>r.json());document.getElementById('history').innerHTML=(d.history||[]).map(x=>'<div class="file"><span>'+(x.message||'Project update')+'</span><span class="muted">'+String(x.hash||'').slice(0,7)+'</span></div>').join('')||'No updates yet.'}
-</script></body></html>`;
-      return new Response(html,{headers:{"content-type":"text/html; charset=utf-8"}});
+      return new Response(projectPage(), { headers: { "content-type": "text/html; charset=utf-8" } });
     }
 
     if (request.method === "GET" && url.pathname === "/") {
