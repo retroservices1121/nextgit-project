@@ -12,5 +12,30 @@
       "binding": "ARTIFACTS",
       "namespace": "nextgit"
     }
-  ]
+  ],
+  "containers": [
+    {
+      "class_name": "AgentSandbox",
+      "scheduling_policy": "durable_object",
+      "images": {
+        "workspace": {
+          "dockerfile": "./Dockerfile"
+        }
+      }
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "AGENT_SANDBOX",
+        "class_name": "AgentSandbox"
+      }
+    ]
+  },
+  "exports": {
+    "AgentSandbox": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
+  }
 }
