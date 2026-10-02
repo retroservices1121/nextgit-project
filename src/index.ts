@@ -58,6 +58,66 @@ export default {
       }), 201);
     }
 
+    if (request.method === "GET" && url.pathname === "/api/demo/compete") {
+      const missionId = "competition-demo";
+      const objective = "Create a concise developer-facing artifact that explains and demonstrates NextGit's core concept: multiple AI implementation agents work independently in isolated repositories, then a human reviews the competing Attempts before accepting one.";
+
+      const attempts = [
+        {
+          id: "competition-demo-alpha",
+          agentId: "alpha",
+          repositoryName: "attempt-competition-demo-alpha",
+        },
+        {
+          id: "competition-demo-beta",
+          agentId: "beta",
+          repositoryName: "attempt-competition-demo-beta",
+        },
+      ];
+
+      const runId = crypto.randomUUID();
+      const results = await Promise.all(
+        attempts.map(async (attempt) => {
+          try {
+            const response = await fetch("https://nextgit-executor.retro-b22.workers.dev/execute-attempt", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                runId,
+                attemptId: attempt.id,
+                repositoryName: attempt.repositoryName,
+                agentId: attempt.agentId,
+                objective,
+              }),
+            });
+            return {
+              attemptId: attempt.id,
+              agentId: attempt.agentId,
+              repositoryName: attempt.repositoryName,
+              ok: response.ok,
+              result: await response.json(),
+            };
+          } catch (error) {
+            return {
+              attemptId: attempt.id,
+              agentId: attempt.agentId,
+              repositoryName: attempt.repositoryName,
+              ok: false,
+              result: { error: error instanceof Error ? error.message : "Executor request failed" },
+            };
+          }
+        }),
+      );
+
+      return reply({
+        ok: results.every((result) => result.ok),
+        missionId,
+        runId,
+        objective,
+        results,
+      }, results.every((result) => result.ok) ? 200 : 207);
+    }
+
     if (request.method === "POST" && url.pathname === "/api/missions/execute") {
       const body = (await request.json()) as {
         missionId?: string;
