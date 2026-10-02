@@ -15,6 +15,8 @@ interface ArtifactRepo {
 interface Env {
   Sandbox: DurableObjectNamespace<Sandbox>;
   ARTIFACTS: { get(name: string): Promise<ArtifactRepo> };
+  OPENAI_API_KEY?: string;
+  AGENT_MODEL?: string;
 }
 
 const json = (data: unknown, status = 200) =>
