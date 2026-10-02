@@ -1,5 +1,6 @@
 import { createMission, createProject, type Env } from "./api";
 import { DecisionService, type DecisionKind } from "./application/decision-service";
+import { MissionPlanner } from "./application/mission-planner";
 
 const reply = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data, null, 2), {
@@ -218,6 +219,14 @@ function revise(id){const f=prompt('What should this agent revise?');if(f)decide
         objective,
         results,
       }, results.every((result) => result.ok) ? 200 : 207);
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/missions/plan") {
+      const body = await request.json() as { missionId?: string; objective?: string; agentIds?: string[] };
+      if (!body.missionId || !body.objective) return reply({ error: "missionId and objective are required" }, 400);
+      const plan = new MissionPlanner().plan({ missionId: body.missionId, objective: body.objective, agentIds: body.agentIds?.length ? body.agentIds : ["agent-a", "agent-b"] });
+      await env.STATE.put(`plan:${body.missionId}`, JSON.stringify(plan));
+      return reply({ ok: true, plan }, 201);
     }
 
     if (request.method === "POST" && url.pathname === "/api/missions/execute") {
