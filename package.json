@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@mastra/core": "latest"
+    "@cloudflare/sandbox": "^1.0.0",
+    "@mastra/core": "latest",
+    "@mastra/memory": "latest"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "latest",
