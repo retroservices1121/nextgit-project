@@ -313,6 +313,17 @@ async function launch(){const s=document.getElementById('status');s.textContent=
       return new Response(response.body, { status: response.status, headers: { "content-type": "application/json" } });
     }
 
+    if (request.method === "GET" && url.pathname === "/api/missions/review") {
+      const user = await currentUser(request, env.DB);
+      if (!user) return reply({ error: "Sign in is required" }, 401);
+      const missionId = url.searchParams.get("missionId");
+      if (!missionId) return reply({ error: "missionId is required" }, 400);
+      const row = await env.DB.prepare("SELECT m.id,m.project_id,m.title,m.objective,m.status,p.name AS project_name,p.repository_name FROM missions m JOIN projects p ON p.id=m.project_id LEFT JOIN project_members pm ON pm.project_id=p.id AND pm.user_id=? WHERE m.id=? AND (p.owner_user_id=? OR pm.user_id=?)").bind(user.id,missionId,user.id,user.id).first<any>();
+      if (!row) return reply({ error: "Mission not found or access denied" }, 404);
+      const integration = await env.STATE.get(`integration:${missionId}`, "json") as any;
+      return reply({ ok: true, mission: row, integration });
+    }
+
     if (request.method === "GET" && url.pathname === "/mission-review") {
       const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NextGit — Your update</title>
 <style>body{font-family:ui-sans-serif,system-ui;background:#0b0d10;color:#f5f7fa;margin:0}main{max-width:900px;margin:auto;padding:42px 20px}.brand{color:#8b9cff;font-weight:800}.sub{color:#a8b0bd}.panel{background:#151922;border:1px solid #293041;border-radius:18px;padding:24px;margin-top:24px}.checks{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:20px 0}.check{background:#0d1117;border-radius:11px;padding:14px}.pass{color:#8df0a6}.fail{color:#ff8f8f}.actions{display:flex;gap:9px;flex-wrap:wrap}.btn{border:0;border-radius:9px;padding:11px 14px;font-weight:800;cursor:pointer}.primary{background:#fff}.secondary{background:#252b36;color:#fff}.details{display:none;white-space:pre-wrap;background:#0d1117;padding:14px;border-radius:10px;margin-top:14px;max-height:380px;overflow:auto;font:12px ui-monospace,monospace;color:#c9d1d9}.status{color:#a8b0bd;margin-top:12px;font-size:13px}details{margin-top:22px;color:#a8b0bd}a{color:#aeb9ff}@media(max-width:650px){.checks{grid-template-columns:1fr}}</style></head>
