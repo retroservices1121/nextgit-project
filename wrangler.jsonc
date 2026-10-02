@@ -17,29 +17,25 @@
   ],
   "containers": [
     {
-      "class_name": "Sandbox",
-      "image": "./Dockerfile",
-      "instance_type": "lite",
-      "max_instances": 10
+      "class_name": "AgentSandbox",
+      "scheduling_policy": "durable_object"
     }
   ],
   "durable_objects": {
     "bindings": [
       {
-        "name": "Sandbox",
-        "class_name": "Sandbox"
+        "name": "AGENT_SANDBOX",
+        "class_name": "AgentSandbox"
       }
     ]
   },
   "vars": {
     "AGENT_MODEL": "openai/gpt-5.2"
   },
-  "migrations": [
-    {
-      "tag": "v1-sandbox-stable",
-      "new_sqlite_classes": [
-        "Sandbox"
-      ]
+  "exports": {
+    "AgentSandbox": {
+      "type": "durable-object",
+      "storage": "sqlite"
     }
-  ]
+  }
 }
