@@ -32,6 +32,7 @@ export class AgentSandbox extends DurableObject<AgentSandboxEnv> {
     }
 
     await this.container.setInactivityTimeout(INACTIVITY_TIMEOUT_MS);
+  }
 
   async run(argv: string[], env: Record<string, string> = {}) {
     await this.ensureRunning();
