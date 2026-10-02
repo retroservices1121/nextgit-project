@@ -91,6 +91,20 @@ export class ArtifactsRepositoryService {
     return { name: created.name, remote: created.remote };
   }
 
+  async createIntegration(
+    canonicalRepositoryName: string,
+    missionId: string,
+  ): Promise<AttemptRepository> {
+    const source = await this.artifacts.get(canonicalRepositoryName);
+    const name = normalize(`integration-${missionId}`);
+    const fork = await source.fork(name, {
+      description: "Integrated Mission candidate",
+      readOnly: false,
+      defaultBranchOnly: true,
+    });
+    return { name: fork.name, remote: fork.remote };
+  }
+
   async createAttempt(
     canonicalRepositoryName: string,
     missionId: string,
