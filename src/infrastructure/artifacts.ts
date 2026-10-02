@@ -7,7 +7,8 @@ export interface ArtifactRepoInfo {
 
 export interface ArtifactCreateTokenResult {
   id?: string;
-  plaintext: string;
+  token?: string;
+  plaintext?: string;
   scope?: "read" | "write";
   expiresAt?: string;
 }
@@ -108,12 +109,17 @@ export class ArtifactsRepositoryService {
       throw new Error(`Artifacts repository ${repositoryName} has no remote URL.`);
     }
 
+    const plaintext = token.plaintext ?? token.token;
+    if (!plaintext) {
+      throw new Error("Artifacts did not return a plaintext repository token.");
+    }
+
     return {
       repository: {
         name: info.name ?? repositoryName,
         remote: info.remote,
       },
-      token,
+      token: { ...token, plaintext },
     };
   }
 
