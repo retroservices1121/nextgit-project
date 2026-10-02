@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build": "npm run typecheck"
   },
   "dependencies": {
     "@cloudflare/sandbox": "^1.0.0",
