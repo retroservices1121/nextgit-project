@@ -53,9 +53,10 @@ export default {
           ARTIFACTS_GIT_REMOTE: authenticatedRemote(info.remote, token.plaintext),
         });
         const result = await sandbox.exec([
-          "rm -rf /workspace/project",
-          "git clone \"$ARTIFACTS_GIT_REMOTE\" /workspace/project",
-          "cd /workspace/project",
+          "cd /workspace",
+          "rm -rf project",
+          "git clone \"$ARTIFACTS_GIT_REMOTE\" project",
+          "cd project",
           "git rev-parse --is-inside-work-tree",
           "git log -1 --oneline",
         ].join(" && "));
