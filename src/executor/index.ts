@@ -83,6 +83,7 @@ export default {
         const listing = await sandbox.exec(`cd ${root} && find . -maxdepth 3 -type f -not -path './.git/*' | sort | head -160`);
         const prompt = [
           "You are an implementation agent in NextGit.",
+          `Your implementation strategy is ${body.agentId.includes("alpha") ? "minimal and documentation-first: prefer a concise new file that explains or demonstrates the requested capability without disturbing existing code." : "product-oriented and implementation-first: prefer a useful source or documentation artifact that makes the requested capability concrete for a developer."}`,
           `Agent ID: ${body.agentId}`,
           `Mission: ${body.objective}`,
           "Choose one useful, low-risk repository change that advances the Mission.",
