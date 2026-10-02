@@ -256,7 +256,7 @@ function revise(id){const f=prompt('What should this agent revise?');if(f)decide
                 attemptId: attempt.id,
                 repositoryName: attempt.repositoryName,
                 agentId: attempt.agentId,
-                objective: body.objective,
+                objective: attempt.objective || body.objective,
               }),
             });
             const result = await response.json() as any;
