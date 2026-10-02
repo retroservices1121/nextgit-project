@@ -95,6 +95,17 @@ async function launch(){const s=document.getElementById('status');s.textContent=
       return new Response(html,{headers:{"content-type":"text/html; charset=utf-8"}});
     }
 
+    if (request.method === "POST" && url.pathname === "/api/attempts/diff") {
+      const body = (await request.json()) as { repositoryName?: string };
+      if (!body.repositoryName) return reply({ error: "repositoryName is required" }, 400);
+      const response = await env.EXECUTOR.fetch("https://executor/diff", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ repositoryName: body.repositoryName }),
+      });
+      return new Response(response.body, { status: response.status, headers: { "content-type": "application/json" } });
+    }
+
     if (request.method === "GET" && url.pathname === "/mission-review") {
       const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NextGit — Mission Review</title>
 <style>body{font-family:ui-sans-serif,system-ui;background:#0b0d10;color:#f5f7fa;margin:0}main{max-width:1100px;margin:auto;padding:34px 20px}.top{color:#8b9cff;font-weight:800}.sub{color:#a8b0bd}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:24px}.card{background:#151922;border:1px solid #293041;border-radius:16px;padding:20px}.ok{color:#8df0a6;font-size:13px;font-weight:700}.file{font:13px ui-monospace,monospace;background:#0d1117;padding:12px;border-radius:9px;margin:14px 0;overflow-wrap:anywhere}.actions{display:flex;gap:8px;flex-wrap:wrap}button{border:0;border-radius:9px;padding:9px 12px;font-weight:700;cursor:pointer}.primary{background:#fff}.secondary{background:#252b36;color:#fff}.details{display:none;white-space:pre-wrap;background:#0d1117;padding:12px;border-radius:9px;margin-top:12px;max-height:300px;overflow:auto;font:12px ui-monospace,monospace;color:#c9d1d9}.status{color:#a8b0bd;font-size:13px;margin-top:10px}a{color:#aeb9ff}@media(max-width:700px){.grid{grid-template-columns:1fr}}</style></head>
@@ -104,9 +115,9 @@ const d=JSON.parse(sessionStorage.getItem('nextgit:lastMission')||'null');
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 if(!d){document.getElementById('objective').textContent='No Mission in this browser session.'}else{
  document.getElementById('title').textContent=d.mission.title||'Mission Review';document.getElementById('objective').textContent=d.mission.objective;
- document.getElementById('cards').innerHTML=d.execution.results.map((r,i)=>{const x=r.result||{};const path=x.selectedPath||'No file produced';const label='Agent '+String.fromCharCode(65+i);return '<section class="card"><div class="ok">'+(r.ok?'✓ Attempt complete':'✕ Attempt failed')+'</div><h2>'+label+'</h2><div class="file">+ '+esc(path)+'</div><p class="sub">'+(r.ok?'Independent implementation ready for review.':'This agent did not complete the Mission.')+'</p><div class="actions"><button class="secondary" onclick="toggle(\''+r.attemptId+'\')">View details</button><button class="primary" onclick="decide(\''+r.attemptId+'\',\'accept\')">Accept</button><button class="secondary" onclick="revise(\''+r.attemptId+'\')">Request revision</button><button class="secondary" onclick="decide(\''+r.attemptId+'\',\'reject\')">Reject</button></div><div class="details" id="detail-'+r.attemptId+'">'+esc(JSON.stringify({agent:r.agentId,path:x.selectedPath,repository:x.repository},null,2))+'</div><div class="status" id="status-'+r.attemptId+'"></div></section>'}).join('');
+ document.getElementById('cards').innerHTML=d.execution.results.map((r,i)=>{const x=r.result||{};const path=x.selectedPath||'No file produced';const label='Agent '+String.fromCharCode(65+i);return '<section class="card"><div class="ok">'+(r.ok?'✓ Attempt complete':'✕ Attempt failed')+'</div><h2>'+label+'</h2><div class="file">+ '+esc(path)+'</div><p class="sub">'+(r.ok?'Independent implementation ready for review.':'This agent did not complete the Mission.')+'</p><div class="actions"><button class="secondary" onclick="showDiff(\''+r.attemptId+'\')">View changes</button><button class="primary" onclick="decide(\''+r.attemptId+'\',\'accept\')">Accept</button><button class="secondary" onclick="revise(\''+r.attemptId+'\')">Request revision</button><button class="secondary" onclick="decide(\''+r.attemptId+'\',\'reject\')">Reject</button></div><div class="details" id="detail-'+r.attemptId+'">'+esc(JSON.stringify({agent:r.agentId,path:x.selectedPath,repository:x.repository},null,2))+'</div><div class="status" id="status-'+r.attemptId+'"></div></section>'}).join('');
 }
-function toggle(id){const e=document.getElementById('detail-'+id);e.style.display=e.style.display==='block'?'none':'block'}
+async function showDiff(id){const item=d.execution.results.find(r=>r.attemptId===id);const e=document.getElementById('detail-'+id);e.style.display='block';e.textContent='Loading Git diff…';const r=await fetch('/api/attempts/diff',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({repositoryName:item.result.repository})});const j=await r.json();e.textContent=r.ok?(j.stdout||'No diff'):'Unable to load diff: '+(j.error||j.stderr||'unknown error')}
 async function decide(id,decision,feedback){const e=document.getElementById('status-'+id);e.textContent='Saving…';const r=await fetch('/api/decisions',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({missionId:d.mission.id,attemptId:id,decision,feedback})});const j=await r.json();e.textContent=r.ok?'Decision recorded: '+decision:'Error: '+(j.error||'decision failed')}
 function revise(id){const f=prompt('What should this agent revise?');if(f)decide(id,'revise',f)}
 </script></body></html>`;
