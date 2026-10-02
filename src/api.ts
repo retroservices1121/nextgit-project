@@ -7,10 +7,12 @@ export interface Env {
   EXECUTOR: Fetcher;
 }
 
-export async function createProject(env: Env, name: string) {
+export async function createProject(env: Env, name: string, sourceUrl?: string, branch?: string) {
   const repositories = new ArtifactsRepositoryService(env.ARTIFACTS);
   const id = crypto.randomUUID();
-  const repository = await repositories.createCanonicalProject(id);
+  const repository = sourceUrl
+    ? await repositories.importCanonicalProject(id, sourceUrl, branch)
+    : await repositories.createCanonicalProject(id);
   return {
     id,
     name,
