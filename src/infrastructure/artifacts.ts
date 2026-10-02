@@ -48,6 +48,7 @@ export interface ArtifactsBinding {
     },
   ): Promise<ArtifactCreateResult>;
   get(name: string): Promise<ArtifactRepoCapability>;
+  import(params: { source: { url: string; branch?: string; depth?: number }; target: { name: string; opts?: { description?: string; readOnly?: boolean } } }): Promise<ArtifactCreateResult>;
 }
 
 export interface AttemptRepository {
@@ -69,6 +70,15 @@ const normalize = (value: string) =>
 
 export class ArtifactsRepositoryService {
   constructor(private readonly artifacts: ArtifactsBinding) {}
+
+  async importCanonicalProject(projectId: string, sourceUrl: string, branch?: string): Promise<AttemptRepository> {
+    const name = normalize(`project-${projectId}`);
+    const imported = await this.artifacts.import({
+      source: { url: sourceUrl, branch, depth: 50 },
+      target: { name, opts: { description: "Imported canonical project repository", readOnly: false } },
+    });
+    return { name: imported.name, remote: imported.remote };
+  }
 
   async createCanonicalProject(projectId: string): Promise<AttemptRepository> {
     const name = normalize(`project-${projectId}`);
