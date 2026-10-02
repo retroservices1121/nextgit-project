@@ -6,6 +6,7 @@ export interface Env {
   ARTIFACTS: ArtifactsBinding;
   EXECUTOR: Fetcher;
   STATE: KVNamespace;
+  AI: { run(model: string, input: unknown): Promise<any> };
 }
 
 export async function createProject(env: Env, name: string, sourceUrl?: string, branch?: string) {
