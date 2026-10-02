@@ -44,6 +44,33 @@ export default {
       return json({ ok: result.exitCode === 0, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr }, result.exitCode === 0 ? 200 : 500);
     }
 
+    if (request.method === "POST" && url.pathname === "/analyze-project") {
+      try {
+        const body = await request.json() as { repositoryName?: string };
+        if (!body.repositoryName) return json({ ok: false, error: "repositoryName is required" }, 400);
+        const repo = await env.ARTIFACTS.get(body.repositoryName);
+        const info = await repo.info();
+        if (!info.remote) throw new Error("Artifacts repository has no remote URL.");
+        const token = await repo.createToken("read", 600);
+        const sandbox = getSandbox(env.Sandbox, `analyze-${body.repositoryName}`);
+        await sandbox.setEnvVars({ ARTIFACTS_GIT_REMOTE: authenticatedRemote(info.remote, token.plaintext) });
+        const result = await sandbox.exec([
+          "cd /workspace",
+          "rm -rf analyze-project",
+          "git clone \"$ARTIFACTS_GIT_REMOTE\" analyze-project",
+          "cd analyze-project",
+          "COUNT=$(find . -type f -not -path './.git/*' | wc -l | tr -d ' ')",
+          "TYPE='software project'",
+          "if [ -f next.config.js ] || [ -f next.config.mjs ] || grep -q '\"next\"' package.json 2>/dev/null; then TYPE='Next.js web app'; elif [ -f vite.config.ts ] || [ -f vite.config.js ]; then TYPE='Vite web app'; elif grep -q '\"react\"' package.json 2>/dev/null; then TYPE='React app'; elif [ -f package.json ]; then TYPE='JavaScript or TypeScript project'; elif [ -f requirements.txt ] || [ -f pyproject.toml ]; then TYPE='Python project'; fi",
+          "printf '%s|%s' \"$TYPE\" \"$COUNT\"",
+        ].join("\n"));
+        const [projectType, count] = (result.stdout || "software project|0").trim().split("|");
+        return json({ ok: result.exitCode === 0, projectType, fileCount: Number(count || 0) });
+      } catch (error) {
+        return json({ ok: false, error: error instanceof Error ? error.message : "Project analysis failed" }, 500);
+      }
+    }
+
     if (request.method === "POST" && url.pathname === "/upload-file") {
       try {
         const body = await request.json() as { repositoryName?: string; path?: string; contentBase64?: string; message?: string };
