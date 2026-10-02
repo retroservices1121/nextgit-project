@@ -44,6 +44,43 @@ export default {
       return json({ ok: result.exitCode === 0, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr }, result.exitCode === 0 ? 200 : 500);
     }
 
+    if (request.method === "POST" && url.pathname === "/upload-file") {
+      try {
+        const body = await request.json() as { repositoryName?: string; path?: string; contentBase64?: string; message?: string };
+        if (!body.repositoryName || !body.path || body.contentBase64 === undefined) return json({ ok: false, error: "repositoryName, path, and contentBase64 are required" }, 400);
+        const path = body.path.replace(/\\/g, "/");
+        if (path.startsWith("/") || path.split("/").includes("..") || !path.trim()) return json({ ok: false, error: "Invalid repository path" }, 400);
+        const repo = await env.ARTIFACTS.get(body.repositoryName);
+        const info = await repo.info();
+        if (!info.remote) throw new Error("Artifacts repository has no remote URL.");
+        const token = await repo.createToken("write", 900);
+        const sandbox = getSandbox(env.Sandbox, `upload-${crypto.randomUUID()}`);
+        await sandbox.setEnvVars({
+          ARTIFACTS_GIT_REMOTE: authenticatedRemote(info.remote, token.plaintext),
+          NEXTGIT_UPLOAD_PATH: path,
+          NEXTGIT_UPLOAD_B64: body.contentBase64,
+          NEXTGIT_UPLOAD_MESSAGE: body.message || `upload: ${path}`,
+        });
+        const result = await sandbox.exec([
+          "cd /workspace",
+          "rm -rf upload-project",
+          "git clone \"$ARTIFACTS_GIT_REMOTE\" upload-project",
+          "cd upload-project",
+          "git config user.name 'NextGit User'",
+          "git config user.email 'user@nextgit.local'",
+          "mkdir -p \"$(dirname \"$NEXTGIT_UPLOAD_PATH\")\"",
+          "printf '%s' \"$NEXTGIT_UPLOAD_B64\" | base64 -d > \"$NEXTGIT_UPLOAD_PATH\"",
+          "git add -- \"$NEXTGIT_UPLOAD_PATH\"",
+          "git commit -m \"$NEXTGIT_UPLOAD_MESSAGE\"",
+          "git push origin HEAD",
+          "git rev-parse HEAD",
+        ].join(" && "));
+        return json({ ok: result.exitCode === 0, repository: body.repositoryName, path, stdout: result.stdout, stderr: result.stderr }, result.exitCode === 0 ? 200 : 500);
+      } catch (error) {
+        return json({ ok: false, error: error instanceof Error ? error.message : "Upload failed" }, 500);
+      }
+    }
+
     if (request.method === "POST" && url.pathname === "/security-scan") {
       try {
         const body = await request.json() as { repositoryName?: string };
