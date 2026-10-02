@@ -3,7 +3,9 @@ import { DurableObject } from "cloudflare:workers";
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 const WORKSPACE = "/workspace/project";
 
-export interface AgentSandboxEnv {}\n\nexport class AgentSandbox extends DurableObject<AgentSandboxEnv> {
+export interface AgentSandboxEnv {}
+
+export class AgentSandbox extends DurableObject<AgentSandboxEnv> {
   private readonly container: any;
 
   constructor(ctx: DurableObjectState, env: AgentSandboxEnv) {
