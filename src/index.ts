@@ -58,6 +58,31 @@ export default {
       }), 201);
     }
 
+    if (request.method === "GET" && url.pathname === "/api/demo/review-data") {
+      const attempts = [
+        { id: "competition-demo-alpha", agentId: "alpha", repositoryName: "attempt-competition-demo-alpha", path: "docs/CONCEPT_OVERVIEW.md" },
+        { id: "competition-demo-beta", agentId: "beta", repositoryName: "attempt-competition-demo-beta", path: "docs/CONCEPTS.md" },
+      ];
+
+      const results = await Promise.all(attempts.map(async (attempt) => {
+        const repo = await env.ARTIFACTS.get(attempt.repositoryName);
+        const info = await repo.info();
+        const file = await repo.readFile?.("main", attempt.path).catch?.(() => undefined);
+        return {
+          ...attempt,
+          remoteConfigured: Boolean(info.remote),
+          content: typeof file === "string" ? file : undefined,
+        };
+      }));
+
+      return reply({
+        missionId: "competition-demo",
+        objective: "Create a concise developer-facing artifact that explains and demonstrates NextGit's core concept: multiple AI implementation agents work independently in isolated repositories, then a human reviews the competing Attempts before accepting one.",
+        canonicalRepository: "nextgit-source",
+        attempts: results,
+      });
+    }
+
     if (request.method === "GET" && url.pathname === "/demo") {
       const html = `<!doctype html>
 <html>
