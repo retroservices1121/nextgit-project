@@ -60,6 +60,23 @@ export default {
       }), 201);
     }
 
+    if (request.method === "GET" && url.pathname === "/api/e2e-run") {
+      try {
+        const result = await executeAttempt(env, {
+          attemptId: "e2e-a",
+          repositoryName: "e2e-attempt-a",
+          objective: "Create a file named E2E_AGENT_PROOF.md containing a short explanation that this file was created by an isolated implementation agent during the NextGit end-to-end test. Do not modify any other file.",
+          agentId: "agent-a",
+        });
+        return reply({ ok: true, result }, 200);
+      } catch (error) {
+        return reply({
+          ok: false,
+          error: error instanceof Error ? error.message : "E2E execution failed",
+        }, 500);
+      }
+    }
+
     if (request.method === "POST" && url.pathname === "/api/attempts/execute") {
       const body = (await request.json()) as {
         attemptId: string;
