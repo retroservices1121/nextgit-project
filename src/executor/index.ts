@@ -51,7 +51,7 @@ export default {
         const repo = await env.ARTIFACTS.get(body.repositoryName);
         const info = await repo.info();
         if (!info.remote) throw new Error("Artifacts repository has no remote URL.");
-        const token = await repo.createToken("read", 600);
+        const token = await repo.createToken("write", 600);
         const sandbox = getSandbox(env.Sandbox, `analyze-${body.repositoryName}`);
         await sandbox.setEnvVars({ ARTIFACTS_GIT_REMOTE: authenticatedRemote(info.remote, token.plaintext) });
         const result = await sandbox.exec([
