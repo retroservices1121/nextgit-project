@@ -1,0 +1,32 @@
+export function projectPage(): string {
+  return `<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NextGit — Project</title>
+<style>
+body{font-family:ui-sans-serif,system-ui;background:#0b0d10;color:#f5f7fa;margin:0}main{max-width:1050px;margin:auto;padding:32px 20px}
+.brand{color:#8b9cff;font-weight:800}.muted{color:#8e98a8}.tabs{display:flex;gap:8px;margin:24px 0;border-bottom:1px solid #293041}
+.tab{padding:10px 12px;cursor:pointer;color:#9ca3af}.tab.active{color:#fff;border-bottom:2px solid #8b9cff}.panel{background:#151922;border:1px solid #293041;border-radius:16px;padding:20px}
+.file{display:flex;justify-content:space-between;padding:11px 8px;border-bottom:1px solid #242b38;cursor:pointer}.file:hover{background:#1a1f29}
+.code{white-space:pre-wrap;background:#0d1117;padding:16px;border-radius:10px;overflow:auto;font:12px ui-monospace,monospace}.hidden{display:none}
+button{background:#252b36;color:#fff;border:0;border-radius:8px;padding:9px 12px;cursor:pointer}.filetabs{display:flex;gap:8px;margin:12px 0}
+.explain{line-height:1.65;background:#10141b;padding:16px;border-radius:10px}a{color:#aeb9ff}
+</style></head><body><main>
+<div class="brand">NEXTGIT</div><h1 id="name">Your project</h1><p class="muted">Your code lives here. NextGit keeps the history for you.</p>
+<div class="tabs"><div class="tab active" data-tab="overview">Overview</div><div class="tab" data-tab="files">Files</div><div class="tab" data-tab="updates">Updates</div><div class="tab" id="buildTab">Build</div></div>
+<section id="overview" class="panel"><h2>Project overview</h2><p>This is the current version of your project. Browse what is inside, see previous updates, or tell NextGit what you want to build next.</p><button id="browse">Browse project files</button></section>
+<section id="files" class="panel hidden"><h2>Files</h2><p class="muted">These are the files that make up your project.</p><div id="fileList">Loading…</div>
+<div id="viewer" class="hidden"><p><button id="backFiles">← Back to files</button></p><h3 id="fileName"></h3><div class="filetabs"><button id="understandTab">Understand</button><button id="codeTab">Code</button></div><div id="explanation" class="explain">Understanding this file…</div><pre class="code hidden" id="fileContent"></pre></div></section>
+<section id="updates" class="panel hidden"><h2>Updates</h2><p class="muted">A history of changes made to your project.</p><div id="history">Loading…</div></section>
+</main><script>
+const saved=JSON.parse(sessionStorage.getItem('nextgit:lastMission')||'null');const repo=saved?.project?.canonicalRepositoryId;document.getElementById('name').textContent=saved?.project?.name||'Your project';
+let currentPath='',treeStack=[];
+function show(id){document.querySelectorAll('section.panel').forEach(x=>x.classList.add('hidden'));document.getElementById(id).classList.remove('hidden');document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.dataset.tab===id));if(id==='files')loadFiles();if(id==='updates')loadHistory()}
+document.querySelectorAll('.tab[data-tab]').forEach(x=>x.onclick=()=>show(x.dataset.tab));document.getElementById('buildTab').onclick=()=>location.href='/';document.getElementById('browse').onclick=()=>show('files');
+async function loadFiles(treeHash,path){if(!repo){fileList.textContent='No project selected.';return}const d=await fetch('/api/project/files?repository='+encodeURIComponent(repo)+(treeHash?'&tree='+encodeURIComponent(treeHash):'')).then(r=>r.json());currentPath=path||'';let h=currentPath?'<div class="file" id="up"><span>← Back</span><span class="muted">'+currentPath+'</span></div>':'';h+=(d.files||[]).map(x=>'<div class="file entry" data-name="'+encodeURIComponent(x.name||x.path||'')+'" data-path="'+encodeURIComponent((currentPath?currentPath+'/':'')+(x.name||x.path||''))+'" data-hash="'+encodeURIComponent(x.hash||'')+'" data-tree="'+(x.type==='tree'?'1':'0')+'"><span>'+(x.type==='tree'?'📁 ':'📄 ')+(x.name||x.path||'')+'</span><span class="muted">'+(x.type==='tree'?'Folder':'File')+'</span></div>').join('');fileList.innerHTML=h||'This project does not have files yet.';if(document.getElementById('up'))document.getElementById('up').onclick=goUp;document.querySelectorAll('.entry').forEach(el=>el.onclick=()=>{if(el.dataset.tree==='1'){treeStack.push({hash:d.treeHash,path:currentPath});loadFiles(decodeURIComponent(el.dataset.hash),decodeURIComponent(el.dataset.path))}else openFile(decodeURIComponent(el.dataset.path))})}
+function goUp(){const p=treeStack.pop();p?loadFiles(p.hash,p.path):loadFiles()}
+async function openFile(path){const d=await fetch('/api/project/file?repository='+encodeURIComponent(repo)+'&path='+encodeURIComponent(path)).then(r=>r.json());fileList.classList.add('hidden');viewer.classList.remove('hidden');fileName.textContent=path;fileContent.textContent=d.binary?'This file cannot be previewed as text.':(d.content||'');fileMode('understand');explanation.textContent=d.binary?'This file is not plain text, so NextGit cannot explain its contents yet.':'Understanding this file…';if(!d.binary){const x=await fetch('/api/project/explain-file',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({repositoryName:repo,path})}).then(r=>r.json());explanation.textContent=x.explanation||'NextGit could not explain this file yet.'}}
+function fileMode(mode){explanation.classList.toggle('hidden',mode!=='understand');fileContent.classList.toggle('hidden',mode!=='code')}
+understandTab.onclick=()=>fileMode('understand');codeTab.onclick=()=>fileMode('code');backFiles.onclick=()=>{viewer.classList.add('hidden');fileList.classList.remove('hidden')};
+async function loadHistory(){if(!repo){history.textContent='No project selected.';return}const d=await fetch('/api/project/history?repository='+encodeURIComponent(repo)).then(r=>r.json());history.innerHTML=(d.history||[]).map(x=>'<div class="file"><span>'+(x.message||'Project update')+'</span><span class="muted">'+String(x.hash||'').slice(0,7)+'</span></div>').join('')||'No updates yet.'}
+</script></body></html>`;
+}
