@@ -97,6 +97,41 @@ export default {
       });
     }
 
+    if (request.method === "GET" && url.pathname === "/api/project/files") {
+      const repositoryName = url.searchParams.get("repository");
+      const treeHash = url.searchParams.get("tree");
+      if (!repositoryName) return reply({ error: "repository is required" }, 400);
+      const repo = await env.ARTIFACTS.get(repositoryName);
+      const history = await repo.log({ ref: "main", limit: 1 });
+      const latest = history[0];
+      if (!latest) return reply({ ok: true, repositoryName, files: [], history: [] });
+      const commit = await repo.readCommit(latest.hash);
+      const targetTree = treeHash || commit?.treeHash;
+      const files = targetTree ? await repo.readTree(targetTree) : [];
+      return reply({ ok: true, repositoryName, latest, treeHash: targetTree, files: files || [] });
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/project/file") {
+      const repositoryName = url.searchParams.get("repository");
+      const path = url.searchParams.get("path");
+      if (!repositoryName || !path) return reply({ error: "repository and path are required" }, 400);
+      const repo = await env.ARTIFACTS.get(repositoryName);
+      const file = await repo.readFile({ ref: "main", path });
+      if (!file) return reply({ error: "File not found" }, 404);
+      if (file.size > 1024 * 1024) return reply({ error: "File is too large to preview here." }, 413);
+      const type = file.type || "application/octet-stream";
+      const textLike = type.startsWith("text/") || /\.(md|json|js|jsx|ts|tsx|css|html|yml|yaml|toml|py|go|rs|java|c|cpp|h|sh|env|txt)$/i.test(path);
+      if (!textLike) return reply({ ok: true, path, type, binary: true, size: file.size });
+      return reply({ ok: true, path, type, binary: false, size: file.size, content: await file.text() });
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/project/history") {
+      const repositoryName = url.searchParams.get("repository");
+      if (!repositoryName) return reply({ error: "repository is required" }, 400);
+      const repo = await env.ARTIFACTS.get(repositoryName);
+      return reply({ ok: true, history: await repo.log({ ref: "main", limit: 50 }) });
+    }
+
     if (request.method === "GET" && url.pathname === "/") {
       const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NextGit</title>
 <style>body{font-family:ui-sans-serif,system-ui;background:#0b0d10;color:#f5f7fa;margin:0}main{max-width:920px;margin:auto;padding:54px 20px}.eyebrow{color:#8b9cff;font-weight:800}.hero{font-size:clamp(40px,8vw,78px);line-height:.95;margin:16px 0}.sub{color:#a8b0bd;font-size:18px;max-width:700px}.panel{margin-top:36px;background:#151922;border:1px solid #293041;border-radius:18px;padding:22px}.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}label{display:block;color:#a8b0bd;font-size:13px;margin:10px 0 6px}input,textarea,select{width:100%;box-sizing:border-box;background:#0d1117;color:#fff;border:1px solid #303848;border-radius:9px;padding:11px}textarea{min-height:120px}button,a.btn{display:inline-block;margin-top:16px;background:#fff;color:#111;border:0;border-radius:9px;padding:11px 16px;font-weight:800;text-decoration:none;cursor:pointer}.muted{color:#7f8998;font-size:13px}.status{white-space:pre-wrap;margin-top:14px;color:#a8b0bd;font:12px ui-monospace,monospace}@media(max-width:650px){.row{grid-template-columns:1fr}}</style></head>
