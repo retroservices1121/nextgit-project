@@ -25,33 +25,13 @@ export class AgentSandbox extends DurableObject<AgentSandboxEnv> {
   private async ensureRunning(): Promise<void> {
     if (!this.container.running) {
       this.container.start({
-        image: "cloudflare/debian-trixie",
+        image: this.container.images.workspace,
         instance: "lite",
         enableInternet: true,
       });
     }
 
     await this.container.setInactivityTimeout(INACTIVITY_TIMEOUT_MS);
-
-    const probe = await this.container.exec([
-      "sh",
-      "-lc",
-      "command -v git >/dev/null 2>&1",
-    ]);
-    const probeOutput = await probe.output();
-
-    if (probeOutput.exitCode !== 0) {
-      const install = await this.container.exec([
-        "sh",
-        "-lc",
-        "apt-get update >/dev/null && apt-get install -y --no-install-recommends git ca-certificates >/dev/null",
-      ]);
-      const installOutput = await install.output();
-      if (installOutput.exitCode !== 0) {
-        throw new Error("Unable to install Git in the agent sandbox.");
-      }
-    }
-  }
 
   async run(argv: string[], env: Record<string, string> = {}) {
     await this.ensureRunning();
