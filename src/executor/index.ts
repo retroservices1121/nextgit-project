@@ -202,6 +202,54 @@ export default {
       }
     }
 
+    if (request.method === "POST" && url.pathname === "/integrate") {
+      try {
+        const body = await request.json() as { canonicalRepository?: string; attemptRepositories?: string[]; integrationRepository?: string };
+        if (!body.canonicalRepository || !body.integrationRepository || !body.attemptRepositories?.length) return json({ ok: false, error: "canonicalRepository, integrationRepository, and attemptRepositories are required" }, 400);
+        const canonical = await env.ARTIFACTS.get(body.canonicalRepository);
+        const canonicalInfo = await canonical.info();
+        if (!canonicalInfo.remote) throw new Error("Canonical repository remote missing.");
+        const canonicalToken = await canonical.createToken("write", 1200);
+        const integration = await env.ARTIFACTS.get(body.integrationRepository);
+        const integrationInfo = await integration.info();
+        if (!integrationInfo.remote) throw new Error("Integration repository remote missing.");
+        const integrationToken = await integration.createToken("write", 1200);
+        const sandbox = getSandbox(env.Sandbox, `integration-${crypto.randomUUID()}`);
+        const envs: Record<string,string> = {
+          CANONICAL_REMOTE: authenticatedRemote(canonicalInfo.remote, canonicalToken.plaintext),
+          INTEGRATION_REMOTE: authenticatedRemote(integrationInfo.remote, integrationToken.plaintext),
+        };
+        for (let i=0;i<body.attemptRepositories.length;i++) {
+          const repo = await env.ARTIFACTS.get(body.attemptRepositories[i]);
+          const info = await repo.info();
+          if (!info.remote) throw new Error("Attempt repository remote missing.");
+          const token = await repo.createToken("write", 1200);
+          envs[`ATTEMPT_${i}_REMOTE`] = authenticatedRemote(info.remote, token.plaintext);
+        }
+        await sandbox.setEnvVars(envs);
+        const commands = [
+          "cd /workspace",
+          "rm -rf integration-project",
+          "git clone \"$CANONICAL_REMOTE\" integration-project",
+          "cd integration-project",
+          "git config user.name 'NextGit Integration Agent'",
+          "git config user.email 'integration@nextgit.local'",
+        ];
+        for (let i=0;i<body.attemptRepositories.length;i++) {
+          commands.push(`git remote add attempt${i} "$ATTEMPT_${i}_REMOTE"`);
+          commands.push(`git fetch attempt${i} main`);
+          commands.push(`git cherry-pick attempt${i}/main || { git cherry-pick --abort; exit ${50+i}; }`);
+        }
+        commands.push("git remote add integration \"$INTEGRATION_REMOTE\"");
+        commands.push("git push integration HEAD:main");
+        commands.push("git rev-parse HEAD");
+        const result = await sandbox.exec(commands.join(" && "));
+        return json({ ok: result.exitCode === 0, integrated: result.exitCode === 0, repository: body.integrationRepository, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr }, result.exitCode === 0 ? 200 : 409);
+      } catch (error) {
+        return json({ ok: false, error: error instanceof Error ? error.message : "Integration failed" }, 500);
+      }
+    }
+
     if (request.method === "POST" && url.pathname === "/promote") {
       try {
         const body = await request.json() as {
