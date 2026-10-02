@@ -265,23 +265,31 @@ async function launch(){const s=document.getElementById('status');s.textContent=
     }
 
     if (request.method === "POST" && url.pathname === "/api/projects/analyze") {
-      const body = await request.json() as { repositoryName?: string };
-      if (!body.repositoryName) return reply({ error: "repositoryName is required" }, 400);
+      const user = await currentUser(request, env.DB);
+      if (!user) return reply({ error: "Sign in is required" }, 401);
+      const body = await request.json() as { projectId?: string };
+      if (!body.projectId) return reply({ error: "projectId is required" }, 400);
+      const project = await requireProjectAccess(env.DB, user.id, body.projectId);
+      if (!project) return reply({ error: "Project not found or access denied" }, 404);
       const response = await env.EXECUTOR.fetch("https://executor/analyze-project", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ repositoryName: project.repository_name }),
       });
       return new Response(response.body, { status: response.status, headers: { "content-type": "application/json" } });
     }
 
     if (request.method === "POST" && url.pathname === "/api/repositories/upload") {
-      const body = await request.json() as { repositoryName?: string; path?: string; contentBase64?: string; message?: string };
-      if (!body.repositoryName || !body.path || body.contentBase64 === undefined) return reply({ error: "repositoryName, path, and contentBase64 are required" }, 400);
+      const user = await currentUser(request, env.DB);
+      if (!user) return reply({ error: "Sign in is required" }, 401);
+      const body = await request.json() as { projectId?: string; path?: string; contentBase64?: string; message?: string };
+      if (!body.projectId || !body.path || body.contentBase64 === undefined) return reply({ error: "projectId, path, and contentBase64 are required" }, 400);
+      const project = await requireProjectAccess(env.DB, user.id, body.projectId);
+      if (!project || !["owner","editor"].includes(project.role)) return reply({ error: "Project not found or write access denied" }, 403);
       const response = await env.EXECUTOR.fetch("https://executor/upload-file", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ repositoryName: project.repository_name, path: body.path, contentBase64: body.contentBase64, message: body.message }),
       });
       return new Response(response.body, { status: response.status, headers: { "content-type": "application/json" } });
     }
