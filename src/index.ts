@@ -638,6 +638,7 @@ function revise(id){const f=prompt('What should this agent revise?');if(f)decide
       if (!promote.ok) return reply({ error: "The verified update could not be applied.", promotion }, 409);
       const applied = { missionId: body.missionId, integrationRepository: integration.repositoryName, canonicalRepository: mission.canonicalRepositoryName, decisionId, appliedAt: new Date().toISOString() };
       await env.STATE.put(`applied:${body.missionId}`, JSON.stringify(applied));
+      await env.DB.prepare("UPDATE missions SET status='applied' WHERE id=?").bind(body.missionId).run();
       return reply({ ok: true, applied, promotion }, 201);
     }
 
