@@ -3,6 +3,7 @@ import { createMission, createProject, type Env } from "./api";
 import { DecisionService, type DecisionKind } from "./application/decision-service";
 import { MissionPlanner } from "./application/mission-planner";
 import { projectPage } from "./ui/project-page";
+import { currentUser, sessionCookie } from "./application/auth";
 
 const reply = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data, null, 2), {
@@ -96,6 +97,40 @@ export default {
         canonicalRepository: "nextgit-source",
         attempts: results,
       });
+    }
+
+    if (request.method === "GET" && url.pathname === "/login") {
+      const user = await currentUser(request, env.DB);
+      if (user) return Response.redirect(new URL("/projects", request.url).toString(), 302);
+      return new Response(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in — NextGit</title><style>body{font-family:system-ui;background:#0b0d10;color:#fff;display:grid;place-items:center;min-height:100vh;margin:0}.box{width:min(420px,90vw);background:#151922;border:1px solid #293041;border-radius:18px;padding:26px}input,button{width:100%;box-sizing:border-box;padding:12px;border-radius:9px;margin-top:10px}input{background:#0d1117;color:#fff;border:1px solid #303848}button{border:0;font-weight:800}.muted{color:#9ca3af}</style></head><body><form class="box" method="post" action="/login"><div style="color:#8b9cff;font-weight:800">NEXTGIT</div><h1>Welcome</h1><p class="muted">Sign in to keep your projects and code connected to you.</p><input name="name" placeholder="Your name"><input name="email" type="email" required placeholder="you@example.com"><button>Continue</button><p class="muted">Competition prototype: email sign-in creates your NextGit account. OAuth providers can be added after the prototype.</p></form></body></html>`, { headers: { "content-type": "text/html; charset=utf-8" } });
+    }
+
+    if (request.method === "POST" && url.pathname === "/login") {
+      const form = await request.formData();
+      const email = String(form.get("email") || "").trim().toLowerCase();
+      const name = String(form.get("name") || "").trim();
+      if (!email || !email.includes("@")) return reply({ error: "A valid email is required" }, 400);
+      let user = await env.DB.prepare("SELECT id,email,name FROM users WHERE email=?").bind(email).first<any>();
+      if (!user) {
+        user = { id: crypto.randomUUID(), email, name: name || null };
+        await env.DB.prepare("INSERT INTO users(id,email,name) VALUES(?,?,?)").bind(user.id,email,user.name).run();
+      }
+      const token = crypto.randomUUID()+crypto.randomUUID();
+      await env.DB.prepare("INSERT INTO sessions(token,user_id,expires_at) VALUES(?,?,datetime('now','+7 days'))").bind(token,user.id).run();
+      return new Response(null,{status:302,headers:{location:"/projects","set-cookie":sessionCookie(token)}});
+    }
+
+    if (request.method === "POST" && url.pathname === "/logout") {
+      const cookie=request.headers.get("cookie")||"";const token=cookie.match(/(?:^|; )nextgit_session=([^;]+)/)?.[1];if(token)await env.DB.prepare("DELETE FROM sessions WHERE token=?").bind(token).run();
+      return new Response(null,{status:302,headers:{location:"/login","set-cookie":"nextgit_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0"}});
+    }
+
+    if (request.method === "GET" && url.pathname === "/projects") {
+      const user = await currentUser(request, env.DB);
+      if (!user) return Response.redirect(new URL("/login", request.url).toString(), 302);
+      const rows = await env.DB.prepare("SELECT DISTINCT p.id,p.name,p.repository_name,p.visibility FROM projects p LEFT JOIN project_members pm ON pm.project_id=p.id WHERE p.owner_user_id=? OR pm.user_id=? ORDER BY p.created_at DESC").bind(user.id,user.id).all<any>();
+      const cards=(rows.results||[]).map((p:any)=>`<a href="/project?id=${encodeURIComponent(p.id)}" style="display:block;background:#151922;border:1px solid #293041;border-radius:14px;padding:18px;color:#fff;text-decoration:none;margin:10px 0"><strong>${p.name}</strong><div style="color:#9ca3af;margin-top:5px">${p.visibility==='public'?'Public':'Private'} project</div></a>`).join("");
+      return new Response(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Your projects — NextGit</title></head><body style="font-family:system-ui;background:#0b0d10;color:#fff;margin:0"><main style="max-width:800px;margin:auto;padding:38px 20px"><div style="color:#8b9cff;font-weight:800">NEXTGIT</div><h1>Your projects</h1><p style="color:#9ca3af">Welcome, ${user.name||user.email}.</p><p><a href="/" style="color:#111;background:#fff;padding:10px 14px;border-radius:9px;text-decoration:none;font-weight:800">+ New project</a></p>${cards||'<p style="color:#9ca3af">You do not have any projects yet.</p>'}<form method="post" action="/logout"><button style="margin-top:25px">Sign out</button></form></main></body></html>`,{headers:{"content-type":"text/html; charset=utf-8"}});
     }
 
     if (request.method === "GET" && url.pathname === "/api/project/files") {
