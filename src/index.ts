@@ -1,6 +1,7 @@
 export { Sandbox } from "@cloudflare/sandbox";
 
 import { createMission, createProject, executeAttempt, type Env } from "./api";
+import { DecisionService, type DecisionKind } from "./application/decision-service";
 
 const reply = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data, null, 2), {
@@ -74,6 +75,32 @@ export default {
           ok: false,
           error: error instanceof Error ? error.message : "E2E execution failed",
         }, 500);
+      }
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/decisions") {
+      const body = (await request.json()) as {
+        missionId?: string;
+        attemptId?: string;
+        decision?: DecisionKind;
+        feedback?: string;
+      };
+
+      if (!body.missionId || !body.attemptId || !body.decision ||
+          !["accept", "reject", "revise"].includes(body.decision)) {
+        return reply({ error: "missionId, attemptId, and a valid decision are required" }, 400);
+      }
+
+      try {
+        const decision = new DecisionService().decide({
+          missionId: body.missionId,
+          attemptId: body.attemptId,
+          decision: body.decision,
+          feedback: body.feedback,
+        });
+        return reply({ ok: true, decision }, 201);
+      } catch (error) {
+        return reply({ error: error instanceof Error ? error.message : "Decision failed" }, 400);
       }
     }
 
