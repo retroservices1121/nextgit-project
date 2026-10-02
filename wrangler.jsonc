@@ -16,12 +16,7 @@
   "containers": [
     {
       "class_name": "AgentSandbox",
-      "scheduling_policy": "durable_object",
-      "images": {
-        "workspace": {
-          "dockerfile": "./Dockerfile"
-        }
-      }
+      "scheduling_policy": "durable_object"
     }
   ],
   "durable_objects": {
