@@ -1,6 +1,6 @@
 import type { ArtifactsBinding } from "./infrastructure/artifacts";
 import { ArtifactsRepositoryService } from "./infrastructure/artifacts";
-import { MissionService } from "./application/mission-service";
+import { MissionOrchestrator } from "./application/mission-orchestrator";
 
 export interface Env {
   ARTIFACTS: ArtifactsBinding;
