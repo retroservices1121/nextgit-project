@@ -49,13 +49,25 @@ export default {
         objective: string;
         agentIds?: string[];
       };
-      return reply(await createMission(env, {
+      const mission = await createMission(env, {
         projectId: body.projectId,
         canonicalRepositoryName: body.canonicalRepositoryName,
         title: body.title,
         objective: body.objective,
         agentIds: body.agentIds?.length ? body.agentIds : ["agent-a", "agent-b"],
-      }), 201);
+      });
+      await env.STATE.put(`mission:${mission.id}`, JSON.stringify(mission));
+      await Promise.all(mission.attempts.map((attempt) =>
+        env.STATE.put(`attempt:${attempt.id}`, JSON.stringify({
+          missionId: mission.id,
+          projectId: mission.projectId,
+          canonicalRepositoryName: mission.canonicalRepositoryName,
+          attemptId: attempt.id,
+          agentId: attempt.agentId,
+          repositoryName: attempt.repository.name,
+        }))
+      ));
+      return reply(mission, 201);
     }
 
     if (request.method === "GET" && url.pathname === "/api/demo/review-data") {
