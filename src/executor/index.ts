@@ -44,6 +44,32 @@ export default {
       return json({ ok: result.exitCode === 0, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr }, result.exitCode === 0 ? 200 : 500);
     }
 
+    if (request.method === "POST" && url.pathname === "/diff") {
+      try {
+        const body = await request.json() as { repositoryName?: string; baseRef?: string; headRef?: string };
+        if (!body.repositoryName) return json({ ok: false, error: "repositoryName is required" }, 400);
+        const repo = await env.ARTIFACTS.get(body.repositoryName);
+        const info = await repo.info();
+        if (!info.remote) throw new Error("Artifacts repository has no remote URL.");
+        const token = await repo.createToken("write", 600);
+        const sandbox = getSandbox(env.Sandbox, `diff-${body.repositoryName}`);
+        await sandbox.setEnvVars({ ARTIFACTS_GIT_REMOTE: authenticatedRemote(info.remote, token.plaintext) });
+        const base = body.baseRef || "HEAD^";
+        const head = body.headRef || "HEAD";
+        const result = await sandbox.exec([
+          "cd /workspace",
+          "rm -rf diff-project",
+          "git clone \"$ARTIFACTS_GIT_REMOTE\" diff-project",
+          "cd diff-project",
+          `git diff --stat ${base} ${head}`,
+          `git diff --no-ext-diff --unified=3 ${base} ${head}`,
+        ].join(" && "));
+        return json({ ok: result.exitCode === 0, repository: body.repositoryName, stdout: result.stdout, stderr: result.stderr }, result.exitCode === 0 ? 200 : 500);
+      } catch (error) {
+        return json({ ok: false, error: error instanceof Error ? error.message : "Diff failed" }, 500);
+      }
+    }
+
     if (request.method === "POST" && url.pathname === "/promote") {
       try {
         const body = await request.json() as {
