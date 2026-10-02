@@ -37,7 +37,7 @@ export class AttemptExecutionRuntime {
       const prepared = await this.launcher.prepare({
         attemptId: input.attemptId,
         repositoryRemote: capability.repository.remote,
-        repositoryToken: capability.token.plaintext,
+        repositoryToken: capability.token.plaintext!,
       });
 
       const result = await input.harness.run({
@@ -60,7 +60,7 @@ export class AttemptExecutionRuntime {
           ].join("\n"),
         ],
         {
-          ARTIFACT_REPO_TOKEN: capability.token.plaintext,
+          ARTIFACT_REPO_TOKEN: capability.token.plaintext!,
         },
       );
 
@@ -76,7 +76,7 @@ export class AttemptExecutionRuntime {
       // fails, and never persist plaintext tokens in Mission state.
       await this.repositories.revokeAttemptCapability(
         input.repositoryName,
-        capability.token.id ?? capability.token.plaintext,
+        capability.token.id ?? capability.token.plaintext!,
       );
     }
   }
