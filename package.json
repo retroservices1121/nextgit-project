@@ -13,7 +13,6 @@
     "build:executor": "tsc --noEmit --project tsconfig.executor.json"
   },
   "dependencies": {
-    "@cloudflare/sandbox": "1.0.0",
     "@mastra/core": "latest",
     "@mastra/memory": "latest",
     "zod": "latest"
