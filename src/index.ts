@@ -16,6 +16,27 @@ export default {
       return reply({ ok: true, service: "nextgit-project", phase: "mission-infrastructure" });
     }
 
+    if (request.method === "GET" && url.pathname === "/api/self-test") {
+      try {
+        const repo = await env.ARTIFACTS.get("nextgit-source");
+        const info = await repo.info();
+        return reply({
+          ok: true,
+          artifacts: {
+            repository: info.name ?? "nextgit-source",
+            remoteConfigured: Boolean(info.remote),
+          },
+          sandbox: Boolean(env.AGENT_SANDBOX),
+          modelConfigured: Boolean(env.AGENT_MODEL),
+        });
+      } catch (error) {
+        return reply({
+          ok: false,
+          error: error instanceof Error ? error.message : "Self-test failed",
+        }, 500);
+      }
+    }
+
     if (request.method === "POST" && url.pathname === "/api/projects") {
       const body = (await request.json()) as { name?: string };
       if (!body.name) return reply({ error: "name is required" }, 400);
