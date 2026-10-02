@@ -401,6 +401,10 @@ function revise(id){const f=prompt('What should this agent revise?');if(f)decide
     if (request.method === "POST" && url.pathname === "/api/missions/plan") {
       const body = await request.json() as { missionId?: string; objective?: string; agentIds?: string[]; projectType?: string };
       if (!body.missionId || !body.objective) return reply({ error: "missionId and objective are required" }, 400);
+      const user = await currentUser(request, env.DB);
+      if (!user) return reply({ error: "Sign in is required" }, 401);
+      const authorizedMission = await env.DB.prepare("SELECT m.id FROM missions m JOIN projects p ON p.id=m.project_id LEFT JOIN project_members pm ON pm.project_id=p.id AND pm.user_id=? WHERE m.id=? AND (p.owner_user_id=? OR (pm.user_id=? AND pm.role IN ('owner','editor')))").bind(user.id,body.missionId,user.id,user.id).first<any>();
+      if (!authorizedMission) return reply({ error: "Mission not found or planning access denied" }, 403);
       const response = await env.EXECUTOR.fetch("https://executor/plan-mission", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -603,6 +607,10 @@ function revise(id){const f=prompt('What should this agent revise?');if(f)decide
     if (request.method === "POST" && url.pathname === "/api/missions/apply") {
       const body = await request.json() as { missionId?: string };
       if (!body.missionId) return reply({ error: "missionId is required" }, 400);
+      const user = await currentUser(request, env.DB);
+      if (!user) return reply({ error: "Sign in is required" }, 401);
+      const authorizedMission = await env.DB.prepare("SELECT m.id FROM missions m JOIN projects p ON p.id=m.project_id LEFT JOIN project_members pm ON pm.project_id=p.id AND pm.user_id=? WHERE m.id=? AND (p.owner_user_id=? OR (pm.user_id=? AND pm.role IN ('owner','editor')))").bind(user.id,body.missionId,user.id,user.id).first<any>();
+      if (!authorizedMission) return reply({ error: "Mission not found or apply access denied" }, 403);
       const mission = await env.STATE.get(`mission:${body.missionId}`, "json") as any;
       const integration = await env.STATE.get(`integration:${body.missionId}`, "json") as any;
       if (!mission || !integration?.repositoryName) return reply({ error: "Mission or integrated update could not be found." }, 404);
