@@ -139,7 +139,13 @@ export default {
     }
 
     if (request.method === "GET" && url.pathname === "/api/project/files") {
-      const user = await currentUser(request, env.DB);\n      if (!user) return reply({ error: "Sign in is required" }, 401);\n      const projectId = url.searchParams.get("projectId");\n      if (!projectId) return reply({ error: "projectId is required" }, 400);\n      const project = await requireProjectAccess(env.DB, user.id, projectId);\n      if (!project) return reply({ error: "Project not found or access denied" }, 404);\n      const repositoryName = project.repository_name;
+      const user = await currentUser(request, env.DB);
+      if (!user) return reply({ error: "Sign in is required" }, 401);
+      const projectId = url.searchParams.get("projectId");
+      if (!projectId) return reply({ error: "projectId is required" }, 400);
+      const project = await requireProjectAccess(env.DB, user.id, projectId);
+      if (!project) return reply({ error: "Project not found or access denied" }, 404);
+      const repositoryName = project.repository_name;
       const treeHash = url.searchParams.get("tree");
       
       const repo = await env.ARTIFACTS.get(repositoryName);
@@ -153,7 +159,13 @@ export default {
     }
 
     if (request.method === "GET" && url.pathname === "/api/project/file") {
-      const user = await currentUser(request, env.DB);\n      if (!user) return reply({ error: "Sign in is required" }, 401);\n      const projectId = url.searchParams.get("projectId");\n      if (!projectId) return reply({ error: "projectId is required" }, 400);\n      const project = await requireProjectAccess(env.DB, user.id, projectId);\n      if (!project) return reply({ error: "Project not found or access denied" }, 404);\n      const repositoryName = project.repository_name;
+      const user = await currentUser(request, env.DB);
+      if (!user) return reply({ error: "Sign in is required" }, 401);
+      const projectId = url.searchParams.get("projectId");
+      if (!projectId) return reply({ error: "projectId is required" }, 400);
+      const project = await requireProjectAccess(env.DB, user.id, projectId);
+      if (!project) return reply({ error: "Project not found or access denied" }, 404);
+      const repositoryName = project.repository_name;
       const path = url.searchParams.get("path");
       if (!repositoryName || !path) return reply({ error: "repository and path are required" }, 400);
       const repo = await env.ARTIFACTS.get(repositoryName);
@@ -178,7 +190,8 @@ export default {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          objective: `Explain this project file to a non-technical software builder. File: ${body.path}. Explain what it does, why the project needs it, what it connects to if evident, and what could be affected by changing it. Do not propose code changes. File contents:\n${content.slice(0, 50000)}`,
+          objective: `Explain this project file to a non-technical software builder. File: ${body.path}. Explain what it does, why the project needs it, what it connects to if evident, and what could be affected by changing it. Do not propose code changes. File contents:
+${content.slice(0, 50000)}`,
           projectType: "file explanation",
           maxWorkstreams: 1,
         }),
@@ -189,7 +202,13 @@ export default {
     }
 
     if (request.method === "GET" && url.pathname === "/api/project/history") {
-      const user = await currentUser(request, env.DB);\n      if (!user) return reply({ error: "Sign in is required" }, 401);\n      const projectId = url.searchParams.get("projectId");\n      if (!projectId) return reply({ error: "projectId is required" }, 400);\n      const project = await requireProjectAccess(env.DB, user.id, projectId);\n      if (!project) return reply({ error: "Project not found or access denied" }, 404);\n      const repositoryName = project.repository_name;
+      const user = await currentUser(request, env.DB);
+      if (!user) return reply({ error: "Sign in is required" }, 401);
+      const projectId = url.searchParams.get("projectId");
+      if (!projectId) return reply({ error: "projectId is required" }, 400);
+      const project = await requireProjectAccess(env.DB, user.id, projectId);
+      if (!project) return reply({ error: "Project not found or access denied" }, 404);
+      const repositoryName = project.repository_name;
       
       const repo = await env.ARTIFACTS.get(repositoryName);
       return reply({ ok: true, history: await repo.log({ ref: "main", limit: 50 }) });
@@ -229,7 +248,8 @@ async function continueWithClarification(){
  const pending=window.nextgitPending;if(!pending)return;
  const extra=document.getElementById('clarification').value.trim();if(!extra)return;
  const s=document.getElementById('status');document.getElementById('clarify').style.display='none';
- const objective=pending.original+"\nAdditional detail from the user: "+extra;
+ const objective=pending.original+"
+Additional detail from the user: "+extra;
  document.getElementById('objective').value=objective;s.textContent='Thanks. Updating the plan…';
  const plan=await fetch('/api/missions/plan',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({missionId:pending.mission.id,objective,agentIds:pending.ids})}).then(r=>r.json());
  if(plan.requiresClarification){s.textContent=plan.message;document.getElementById('clarify').style.display='block';pending.original=objective;return}
