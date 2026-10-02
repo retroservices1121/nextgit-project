@@ -356,8 +356,9 @@ function revise(id){const f=prompt('What should this agent revise?');if(f)decide
       }
 
       const runId = crypto.randomUUID();
-      const results = await Promise.all(
-        body.attempts.map(async (attempt) => {
+      const storedPlan = await env.STATE.get(`plan:${body.missionId}`, "json") as any;
+      const executionMode = storedPlan?.decision?.execution || "parallel";
+      const executeOne = async (attempt: any) => {
           try {
             const response = await env.EXECUTOR.fetch("https://executor/execute-attempt", {
               method: "POST",
@@ -389,8 +390,13 @@ function revise(id){const f=prompt('What should this agent revise?');if(f)decide
               result: { error: error instanceof Error ? error.message : "Executor request failed" },
             };
           }
-        }),
-      );
+        };
+      let results: any[] = [];
+      if (executionMode === "sequential") {
+        for (const attempt of body.attempts) results.push(await executeOne(attempt));
+      } else {
+        results = await Promise.all(body.attempts.map(executeOne));
+      }
 
       const mission = await env.STATE.get(`mission:${body.missionId}`, "json") as any;
       let integration: any = null;
