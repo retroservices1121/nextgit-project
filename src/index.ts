@@ -326,12 +326,31 @@ function revise(id){const f=prompt('What should this agent revise?');if(f)decide
         }),
       );
 
+      const mission = await env.STATE.get(`mission:${body.missionId}`, "json") as any;
+      let integration: any = null;
+      const safe = results.filter((result: any) => result.ok && result.security?.passed === true);
+      if (mission?.canonicalRepositoryName && safe.length) {
+        const repositories = new ArtifactsRepositoryService(env.ARTIFACTS);
+        const integrationRepo = await repositories.createIntegration(mission.canonicalRepositoryName, body.missionId);
+        integration = await env.EXECUTOR.fetch("https://executor/integrate", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            canonicalRepository: mission.canonicalRepositoryName,
+            attemptRepositories: safe.map((result: any) => result.result.repository),
+            integrationRepository: integrationRepo.name,
+          }),
+        }).then(async (response) => ({ httpOk: response.ok, ...(await response.json() as any) }));
+        await env.STATE.put(`integration:${body.missionId}`, JSON.stringify({ repositoryName: integrationRepo.name, ...integration }));
+      }
+
       return reply({
-        ok: results.every((result) => result.ok),
+        ok: results.every((result) => result.ok) && integration?.integrated === true,
         missionId: body.missionId,
         runId,
         results,
-      }, results.every((result) => result.ok) ? 200 : 207);
+        integration,
+      }, results.every((result) => result.ok) && integration?.integrated === true ? 200 : 207);
     }
 
     if (request.method === "POST" && url.pathname === "/api/decisions") {
