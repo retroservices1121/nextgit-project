@@ -23,6 +23,9 @@ export interface ArtifactCreateResult {
 export interface ArtifactRepoCapability {
   info(): Promise<ArtifactRepoInfo>;
   readFile(args: { ref: string; path: string }): Promise<Blob | null>;
+  log(opts?: { ref?: string; limit?: number; offset?: number }): Promise<any[]>;
+  readCommit(hash: string): Promise<any | null>;
+  readTree(hash: string): Promise<any[] | null>;
   createToken(
     scope?: "read" | "write",
     ttl?: number,
