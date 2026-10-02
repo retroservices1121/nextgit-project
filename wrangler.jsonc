@@ -21,5 +21,11 @@
       "binding": "EXECUTOR",
       "service": "nextgit-executor"
     }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "STATE",
+      "id": "NEXTGIT_STATE_KV"
+    }
   ]
 }
