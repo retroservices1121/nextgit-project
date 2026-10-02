@@ -202,6 +202,29 @@ export default {
       }
     }
 
+    if (request.method === "POST" && url.pathname === "/test-project") {
+      try {
+        const body = await request.json() as { repositoryName?: string };
+        if (!body.repositoryName) return json({ ok: false, error: "repositoryName is required" }, 400);
+        const repo = await env.ARTIFACTS.get(body.repositoryName);
+        const info = await repo.info();
+        if (!info.remote) throw new Error("Artifacts repository has no remote URL.");
+        const token = await repo.createToken("write", 900);
+        const sandbox = getSandbox(env.Sandbox, `test-${body.repositoryName}`);
+        await sandbox.setEnvVars({ ARTIFACTS_GIT_REMOTE: authenticatedRemote(info.remote, token.plaintext) });
+        const result = await sandbox.exec([
+          "cd /workspace",
+          "rm -rf test-project",
+          "git clone \"$ARTIFACTS_GIT_REMOTE\" test-project",
+          "cd test-project",
+          "if [ -f package.json ]; then npm install --ignore-scripts >/tmp/install.log 2>&1 || exit 61; npm run build --if-present >/tmp/build.log 2>&1 || exit 62; npm test --if-present -- --runInBand >/tmp/test.log 2>&1 || npm test --if-present >/tmp/test.log 2>&1 || exit 63; elif [ -f pyproject.toml ] || [ -f requirements.txt ]; then python -m compileall -q . || exit 64; else git status --porcelain; fi",
+        ].join(" && "));
+        return json({ ok: true, passed: result.exitCode === 0, status: result.exitCode === 0 ? "pass" : "failed", exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr });
+      } catch (error) {
+        return json({ ok: false, passed: false, error: error instanceof Error ? error.message : "Project test failed" }, 500);
+      }
+    }
+
     if (request.method === "POST" && url.pathname === "/integrate") {
       try {
         const body = await request.json() as { canonicalRepository?: string; attemptRepositories?: string[]; integrationRepository?: string };
