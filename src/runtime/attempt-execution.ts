@@ -3,6 +3,7 @@ import type {
   AgentRuntimeLauncher,
   AgentSandboxStub,
 } from "./agent-runtime";
+import { DeterministicSecurityAgent } from "../agents/security/security-agent";
 
 export interface CodingHarness {
   id: string;
@@ -55,25 +56,43 @@ export class AttemptExecutionRuntime {
             "cd /workspace/project",
             "git add -A",
             "if git diff --cached --quiet; then exit 0; fi",
-            "git commit -m \"agent: complete mission attempt\"",
+            "git commit -m 'agent: complete mission attempt'",
             "GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/git-askpass.sh git push origin HEAD",
           ].join("\n"),
         ],
-        {
-          ARTIFACT_REPO_TOKEN: capability.token.plaintext!,
-        },
+        { ARTIFACT_REPO_TOKEN: capability.token.plaintext! },
       );
 
       if (push.exitCode !== 0) {
-        throw new Error(
-          `Attempt push failed: ${push.stderr || push.stdout}`,
-        );
+        throw new Error(`Attempt push failed: ${push.stderr || push.stdout}`);
       }
 
-      return result;
+      const changed = await prepared.sandbox.run([
+        "sh",
+        "-lc",
+        "cd /workspace/project && git diff-tree --no-commit-id --name-only -r HEAD",
+      ]);
+
+      const securityFiles: Array<{ path: string; content: string }> = [];
+      for (const path of changed.stdout.split("\n").map((x) => x.trim()).filter(Boolean)) {
+        const read = await prepared.sandbox.run(
+          ["sh", "-lc", "cd /workspace/project && cat -- \"$TARGET\""],
+          { TARGET: path },
+        );
+        if (read.exitCode === 0) securityFiles.push({ path, content: read.stdout });
+      }
+
+      const security = await new DeterministicSecurityAgent().inspect({
+        attemptId: input.attemptId,
+        files: securityFiles,
+      });
+
+      return {
+        ...result,
+        security,
+        eligibleForDecision: !security.blocking,
+      };
     } finally {
-      // Tokens are disposable capabilities. Revoke them even when the agent
-      // fails, and never persist plaintext tokens in Mission state.
       await this.repositories.revokeAttemptCapability(
         input.repositoryName,
         capability.token.id ?? capability.token.plaintext!,
