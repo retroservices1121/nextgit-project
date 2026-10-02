@@ -15,5 +15,11 @@
       "namespace": "nextgit"
     }
   ],
-  "vars": {}
+  "vars": {},
+  "exports": {
+    "AgentSandbox": {
+      "type": "durable-object",
+      "state": "deleted"
+    }
+  }
 }
