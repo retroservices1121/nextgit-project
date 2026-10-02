@@ -342,11 +342,18 @@ function revise(id){const f=prompt('What should this agent revise?');if(f)decide
             integrationRepository: integrationRepo.name,
           }),
         }).then(async (response) => ({ httpOk: response.ok, ...(await response.json() as any) }));
+        let finalSecurity: any = null;
+        let tests: any = null;
+        if (integration?.integrated === true) {
+          finalSecurity = await env.EXECUTOR.fetch("https://executor/security-scan", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ repositoryName: integrationRepo.name }) }).then(r => r.json());
+          tests = await env.EXECUTOR.fetch("https://executor/test-project", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ repositoryName: integrationRepo.name }) }).then(r => r.json());
+        }
+        integration = { ...integration, finalSecurity, tests, ready: integration?.integrated === true && finalSecurity?.passed === true && tests?.passed === true };
         await env.STATE.put(`integration:${body.missionId}`, JSON.stringify({ repositoryName: integrationRepo.name, ...integration }));
       }
 
       return reply({
-        ok: results.every((result) => result.ok) && integration?.integrated === true,
+        ok: results.every((result) => result.ok) && integration?.ready === true,
         missionId: body.missionId,
         runId,
         results,
