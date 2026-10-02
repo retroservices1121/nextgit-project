@@ -61,10 +61,25 @@ export default {
           "cd security-project",
           "BASE=$(git rev-parse HEAD^ 2>/dev/null || true)",
           "FILES=$(git diff --name-only \"$BASE\" HEAD 2>/dev/null || git show --pretty='' --name-only HEAD)",
-          "printf '%s\\n' \"$FILES\"",
           "git diff \"$BASE\" HEAD 2>/dev/null > /tmp/nextgit.diff || git show --format= --patch HEAD > /tmp/nextgit.diff",
-          "if grep -En '(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|AKIA[0-9A-Z]{16}|sk-[A-Za-z0-9_-]{20,}|password[[:space:]]*[:=][[:space:]]*[^[:space:]]+)' /tmp/nextgit.diff; then exit 42; fi",
-          "if printf '%s\\n' \"$FILES\" | grep -Eq '(^|/)(\\.env($|\\.)|id_rsa|id_ed25519|credentials\\.json)
+          "grep -En '(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|AKIA[0-9A-Z]{16}|sk-[A-Za-z0-9_-]{20,}|password[[:space:]]*[:=][[:space:]]*[^[:space:]]+)' /tmp/nextgit.diff >/tmp/secret-findings 2>/dev/null && exit 42 || true",
+          "printf '%s\\n' \"$FILES\" | grep -Eq '(^|/)([.]env($|[.])|id_rsa|id_ed25519|credentials[.]json)$' && exit 43 || true",
+          "exit 0",
+        ].join("\n"));
+        const passed = result.exitCode === 0;
+        return json({
+          ok: true,
+          passed,
+          status: passed ? "pass" : "blocked",
+          findings: passed ? [] : [{ severity: "high", message: result.exitCode === 43 ? "Sensitive credential file added or changed." : "Potential secret or private key detected in diff." }],
+          scannedRepository: body.repositoryName,
+        });
+      } catch (error) {
+        return json({ ok: false, error: error instanceof Error ? error.message : "Security scan failed" }, 500);
+      }
+    }
+
+    if (request.method === "POST" && url.pathname === "/diff") {
       try {
         const body = await request.json() as { repositoryName?: string; baseRef?: string; headRef?: string };
         if (!body.repositoryName) return json({ ok: false, error: "repositoryName is required" }, 400);
