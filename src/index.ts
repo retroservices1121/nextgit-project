@@ -257,7 +257,7 @@ function revise(id){const f=prompt('What should this agent revise?');if(f)decide
         return reply({ ok: true, plan: fallback, planner: "fallback" }, 201);
       }
       const agents = body.agentIds?.length ? body.agentIds : ["agent-a", "agent-b", "agent-c", "agent-d"];
-      const tasks = planned.plan.tasks.slice(0, agents.length).map((task: any, i: number) => ({
+      let tasks = planned.plan.tasks.slice(0, agents.length).map((task: any, i: number) => ({
         id: crypto.randomUUID(),
         title: String(task.title || `Part ${i + 1}`),
         objective: String(task.objective || body.objective),
@@ -265,7 +265,53 @@ function revise(id){const f=prompt('What should this agent revise?');if(f)decide
         mode: task.mode === "sequence" ? "sequence" : "parallel",
         dependsOn: Array.isArray(task.dependsOn) ? task.dependsOn : [],
       }));
-      const plan = { missionId: body.missionId, summary: String(planned.plan.summary || "NextGit created a work plan."), tasks };
+
+      const clef = await env.AI.run("@cf/cloudflare/clef-flash", {
+        model: "clef-flash",
+        state: JSON.stringify({
+          userRequest: body.objective,
+          projectType: body.projectType || "unknown software project",
+          proposedWorkstreams: tasks.map((task: any, index: number) => ({ index, title: task.title, objective: task.objective })),
+        }),
+        questions: {
+          execution: {
+            type: "choice",
+            instructions: "Choose how these workstreams should be coordinated. Pick parallel only when they can proceed independently, sequential when later work depends on earlier work, mixed when both patterns are present, or clarify when the user's intent is too ambiguous to safely proceed.",
+            criteria: {
+              parallel: "Workstreams are independent and can run concurrently.",
+              sequential: "Workstreams should run in dependency order.",
+              mixed: "Some can run in parallel while others depend on prior work.",
+              clarify: "The request is ambiguous enough that NextGit should be conservative."
+            }
+          },
+          humanReview: {
+            type: "noul",
+            instructions: "Does this request involve unusually sensitive or high-impact changes that should receive extra human attention before application?"
+          },
+          risk: {
+            type: "score",
+            instructions: "Rate the implementation risk of this requested change.",
+            criteria: ["Low", "Moderate", "High", "Critical"]
+          }
+        }
+      }) as any;
+
+      const executionChoice = clef?.answers?.execution?.choice || "mixed";
+      const needsClarification = executionChoice === "clarify";
+      if (executionChoice === "parallel") {
+        tasks = tasks.map((task: any) => ({ ...task, mode: "parallel", dependsOn: [] }));
+      } else if (executionChoice === "sequential" || executionChoice === "clarify") {
+        tasks = tasks.map((task: any, i: number) => ({ ...task, mode: "sequence", dependsOn: i === 0 ? [] : [i - 1] }));
+      }
+      const decision = {
+        model: "clef-flash",
+        execution: executionChoice,
+        needsClarification,
+        extraHumanReview: Number(clef?.answers?.humanReview?.noul || 0) >= 0.5,
+        riskScore: clef?.answers?.risk?.score,
+        confidence: clef?.answers?.execution?.confidence
+      };
+      const plan = { missionId: body.missionId, summary: String(planned.plan.summary || "NextGit created a work plan."), tasks, decision };
       await env.STATE.put(`plan:${body.missionId}`, JSON.stringify(plan));
       return reply({ ok: true, plan, planner: "ai" }, 201);
     }
