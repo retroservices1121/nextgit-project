@@ -8,8 +8,9 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "build": "npm run typecheck",
-    "deploy:executor": "wrangler deploy --config wrangler.executor.jsonc"
+    "build": "tsc --noEmit --project tsconfig.control.json",
+    "deploy:executor": "npm run build:executor && wrangler deploy --config wrangler.executor.jsonc",
+    "build:executor": "tsc --noEmit --project tsconfig.executor.json"
   },
   "dependencies": {
     "@cloudflare/sandbox": "1.0.0",
