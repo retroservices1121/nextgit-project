@@ -22,6 +22,7 @@ export interface ArtifactCreateResult {
 
 export interface ArtifactRepoCapability {
   info(): Promise<ArtifactRepoInfo>;
+  readFile(args: { ref: string; path: string }): Promise<Blob | null>;
   createToken(
     scope?: "read" | "write",
     ttl?: number,
