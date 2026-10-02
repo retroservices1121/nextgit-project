@@ -58,6 +58,57 @@ export default {
       }), 201);
     }
 
+    if (request.method === "POST" && url.pathname === "/api/missions/execute") {
+      const body = (await request.json()) as {
+        missionId?: string;
+        objective?: string;
+        attempts?: Array<{
+          id: string;
+          agentId: string;
+          repositoryName: string;
+        }>;
+      };
+
+      if (!body.missionId || !body.objective || !body.attempts?.length) {
+        return reply({ error: "missionId, objective, and attempts are required" }, 400);
+      }
+
+      const runId = crypto.randomUUID();
+      const results = await Promise.all(
+        body.attempts.map(async (attempt) => {
+          try {
+            const response = await fetch("https://nextgit-executor.retro-b22.workers.dev/execute-attempt", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                runId,
+                attemptId: attempt.id,
+                repositoryName: attempt.repositoryName,
+                agentId: attempt.agentId,
+                objective: body.objective,
+              }),
+            });
+            const result = await response.json();
+            return { attemptId: attempt.id, agentId: attempt.agentId, ok: response.ok, result };
+          } catch (error) {
+            return {
+              attemptId: attempt.id,
+              agentId: attempt.agentId,
+              ok: false,
+              result: { error: error instanceof Error ? error.message : "Executor request failed" },
+            };
+          }
+        }),
+      );
+
+      return reply({
+        ok: results.every((result) => result.ok),
+        missionId: body.missionId,
+        runId,
+        results,
+      }, results.every((result) => result.ok) ? 200 : 207);
+    }
+
     if (request.method === "POST" && url.pathname === "/api/decisions") {
       const body = (await request.json()) as {
         missionId?: string;
