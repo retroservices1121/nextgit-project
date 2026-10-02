@@ -237,6 +237,7 @@ function revise(id){const f=prompt('What should this agent revise?');if(f)decide
           id: string;
           agentId: string;
           repositoryName: string;
+          objective?: string;
         }>;
       };
 
