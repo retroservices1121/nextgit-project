@@ -3,7 +3,7 @@ import { createMission, createProject, type Env } from "./api";
 import { DecisionService, type DecisionKind } from "./application/decision-service";
 import { MissionPlanner } from "./application/mission-planner";
 import { projectPage } from "./ui/project-page";
-import { currentUser, sessionCookie } from "./application/auth";
+import { currentUser, requireProjectAccess, sessionCookie } from "./application/auth";
 
 const reply = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data, null, 2), {
@@ -139,9 +139,9 @@ export default {
     }
 
     if (request.method === "GET" && url.pathname === "/api/project/files") {
-      const repositoryName = url.searchParams.get("repository");
+      const user = await currentUser(request, env.DB);\n      if (!user) return reply({ error: "Sign in is required" }, 401);\n      const projectId = url.searchParams.get("projectId");\n      if (!projectId) return reply({ error: "projectId is required" }, 400);\n      const project = await requireProjectAccess(env.DB, user.id, projectId);\n      if (!project) return reply({ error: "Project not found or access denied" }, 404);\n      const repositoryName = project.repository_name;
       const treeHash = url.searchParams.get("tree");
-      if (!repositoryName) return reply({ error: "repository is required" }, 400);
+      
       const repo = await env.ARTIFACTS.get(repositoryName);
       const history = await repo.log({ ref: "main", limit: 1 });
       const latest = history[0];
@@ -153,7 +153,7 @@ export default {
     }
 
     if (request.method === "GET" && url.pathname === "/api/project/file") {
-      const repositoryName = url.searchParams.get("repository");
+      const user = await currentUser(request, env.DB);\n      if (!user) return reply({ error: "Sign in is required" }, 401);\n      const projectId = url.searchParams.get("projectId");\n      if (!projectId) return reply({ error: "projectId is required" }, 400);\n      const project = await requireProjectAccess(env.DB, user.id, projectId);\n      if (!project) return reply({ error: "Project not found or access denied" }, 404);\n      const repositoryName = project.repository_name;
       const path = url.searchParams.get("path");
       if (!repositoryName || !path) return reply({ error: "repository and path are required" }, 400);
       const repo = await env.ARTIFACTS.get(repositoryName);
@@ -189,14 +189,20 @@ export default {
     }
 
     if (request.method === "GET" && url.pathname === "/api/project/history") {
-      const repositoryName = url.searchParams.get("repository");
-      if (!repositoryName) return reply({ error: "repository is required" }, 400);
+      const user = await currentUser(request, env.DB);\n      if (!user) return reply({ error: "Sign in is required" }, 401);\n      const projectId = url.searchParams.get("projectId");\n      if (!projectId) return reply({ error: "projectId is required" }, 400);\n      const project = await requireProjectAccess(env.DB, user.id, projectId);\n      if (!project) return reply({ error: "Project not found or access denied" }, 404);\n      const repositoryName = project.repository_name;
+      
       const repo = await env.ARTIFACTS.get(repositoryName);
       return reply({ ok: true, history: await repo.log({ ref: "main", limit: 50 }) });
     }
 
     if (request.method === "GET" && url.pathname === "/project") {
-      return new Response(projectPage(), { headers: { "content-type": "text/html; charset=utf-8" } });
+      const user = await currentUser(request, env.DB);
+      if (!user) return Response.redirect(new URL("/login", request.url).toString(), 302);
+      const projectId = url.searchParams.get("id");
+      if (!projectId) return Response.redirect(new URL("/projects", request.url).toString(), 302);
+      const project = await requireProjectAccess(env.DB, user.id, projectId);
+      if (!project) return new Response("Project not found or you do not have access.", { status: 404 });
+      return new Response(projectPage(), { headers: { "content-type": "text/html; charset=utf-8", "x-nextgit-project-id": projectId } });
     }
 
     if (request.method === "GET" && url.pathname === "/") {
