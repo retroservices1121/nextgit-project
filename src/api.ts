@@ -4,6 +4,7 @@ import { MissionOrchestrator } from "./application/mission-orchestrator";
 
 export interface Env {
   ARTIFACTS: ArtifactsBinding;
+  EXECUTOR: Fetcher;
 }
 
 export async function createProject(env: Env, name: string) {
