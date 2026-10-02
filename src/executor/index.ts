@@ -47,13 +47,12 @@ export default {
           ARTIFACTS_GIT_REMOTE: authenticatedRemote(repo.remote, token.plaintext),
         });
         const result = await sandbox.exec([
-          "set -eu",
           "rm -rf /workspace/project",
           "git clone \"$ARTIFACTS_GIT_REMOTE\" /workspace/project",
           "cd /workspace/project",
           "git rev-parse --is-inside-work-tree",
           "git log -1 --oneline",
-        ].join("\n"));
+        ].join(" && "));
         return json({
           ok: result.exitCode === 0,
           repository: "e2e-attempt-a",
