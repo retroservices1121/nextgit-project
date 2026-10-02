@@ -41,10 +41,12 @@ export default {
     if (url.pathname === "/artifacts-proof") {
       try {
         const repo = await env.ARTIFACTS.get("e2e-attempt-a");
+        const info = await repo.info();
+        if (!info.remote) throw new Error("Artifacts repository has no remote URL.");
         const token = await repo.createToken("write", 900);
         const sandbox = getSandbox(env.Sandbox, "artifacts-proof-a");
         await sandbox.setEnvVars({
-          ARTIFACTS_GIT_REMOTE: authenticatedRemote(repo.remote, token.plaintext),
+          ARTIFACTS_GIT_REMOTE: authenticatedRemote(info.remote, token.plaintext),
         });
         const result = await sandbox.exec([
           "rm -rf /workspace/project",
