@@ -419,22 +419,6 @@ export default {
     return json({ service: "nextgit-executor", endpoints: ["GET /health", "GET /sandbox-proof", "GET /artifacts-proof"] });
   },
 };
-; then exit 43; fi",
-          "exit 0",
-        ].join("\n"));
-        const passed = result.exitCode === 0;
-        return json({
-          ok: true,
-          passed,
-          status: passed ? "pass" : "blocked",
-          findings: passed ? [] : [{ severity: "high", message: result.exitCode === 43 ? "Sensitive credential file added or changed." : "Potential secret or private key detected in diff." }],
-          scannedRepository: body.repositoryName,
-        });
-      } catch (error) {
-        return json({ ok: false, error: error instanceof Error ? error.message : "Security scan failed" }, 500);
-      }
-    }
-
     if (request.method === "POST" && url.pathname === "/diff") {
       try {
         const body = await request.json() as { repositoryName?: string; baseRef?: string; headRef?: string };
