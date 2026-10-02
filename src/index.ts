@@ -394,6 +394,25 @@ function revise(id){const f=prompt('What should this agent revise?');if(f)decide
       let results: any[] = [];
       if (executionMode === "sequential") {
         for (const attempt of body.attempts) results.push(await executeOne(attempt));
+      } else if (executionMode === "mixed" && Array.isArray(storedPlan?.tasks)) {
+        const remaining = body.attempts.map((attempt: any, index: number) => ({ attempt, index }));
+        const completed = new Set<number>();
+        while (remaining.length) {
+          const ready = remaining.filter(({ index }) => {
+            const deps = Array.isArray(storedPlan.tasks[index]?.dependsOn) ? storedPlan.tasks[index].dependsOn : [];
+            return deps.every((dep: number) => completed.has(dep));
+          });
+          if (!ready.length) {
+            return reply({ error: "The work plan contains unresolved task dependencies." }, 409);
+          }
+          const batch = await Promise.all(ready.map(({ attempt }) => executeOne(attempt)));
+          results.push(...batch);
+          ready.forEach(({ index }) => completed.add(index));
+          for (const item of ready) {
+            const pos = remaining.findIndex((candidate) => candidate.index === item.index);
+            if (pos >= 0) remaining.splice(pos, 1);
+          }
+        }
       } else {
         results = await Promise.all(body.attempts.map(executeOne));
       }
