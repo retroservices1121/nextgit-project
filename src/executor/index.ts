@@ -44,6 +44,56 @@ export default {
       return json({ ok: result.exitCode === 0, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr }, result.exitCode === 0 ? 200 : 500);
     }
 
+    if (request.method === "POST" && url.pathname === "/promote") {
+      try {
+        const body = await request.json() as {
+          sourceRepository?: string;
+          targetRepository?: string;
+          decisionId?: string;
+        };
+        if (!body.sourceRepository || !body.targetRepository || !body.decisionId) {
+          return json({ ok: false, error: "sourceRepository, targetRepository, and decisionId are required" }, 400);
+        }
+
+        const source = await env.ARTIFACTS.get(body.sourceRepository);
+        const target = await env.ARTIFACTS.get(body.targetRepository);
+        const sourceInfo = await source.info();
+        const targetInfo = await target.info();
+        if (!sourceInfo.remote || !targetInfo.remote) throw new Error("Promotion repository remote missing.");
+
+        const sourceToken = await source.createToken("write", 900);
+        const targetToken = await target.createToken("write", 900);
+        const sandbox = getSandbox(env.Sandbox, `promotion-${body.decisionId}`);
+        await sandbox.setEnvVars({
+          SOURCE_REMOTE: authenticatedRemote(sourceInfo.remote, sourceToken.plaintext),
+          TARGET_REMOTE: authenticatedRemote(targetInfo.remote, targetToken.plaintext),
+        });
+
+        const result = await sandbox.exec([
+          "cd /workspace",
+          "rm -rf promotion-project",
+          "git clone \"$SOURCE_REMOTE\" promotion-project",
+          "cd promotion-project",
+          "git remote add canonical \"$TARGET_REMOTE\"",
+          "git fetch canonical main",
+          "git merge-base --is-ancestor canonical/main HEAD",
+          "git push canonical HEAD:main",
+          "git rev-parse HEAD",
+        ].join(" && "));
+
+        return json({
+          ok: result.exitCode === 0,
+          sourceRepository: body.sourceRepository,
+          targetRepository: body.targetRepository,
+          exitCode: result.exitCode,
+          stdout: result.stdout,
+          stderr: result.stderr,
+        }, result.exitCode === 0 ? 200 : 409);
+      } catch (error) {
+        return json({ ok: false, error: error instanceof Error ? error.message : "Promotion failed" }, 500);
+      }
+    }
+
     if (request.method === "POST" && url.pathname === "/execute-attempt") {
       try {
         if (!env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not configured.");
