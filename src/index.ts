@@ -1,5 +1,3 @@
-export { AgentSandbox } from "./runtime/agent-sandbox";
-
 import { createMission, createProject, type Env } from "./api";
 import { DecisionService, type DecisionKind } from "./application/decision-service";
 
