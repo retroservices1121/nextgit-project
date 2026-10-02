@@ -7,6 +7,7 @@ export interface Env {
   EXECUTOR: Fetcher;
   STATE: KVNamespace;
   AI: { run(model: string, input: unknown): Promise<any> };
+  DB: D1Database;
 }
 
 export async function createProject(env: Env, name: string, sourceUrl?: string, branch?: string) {
