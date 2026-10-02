@@ -2,9 +2,13 @@ import { getSandbox, type Sandbox } from "@cloudflare/sandbox";
 
 export { Sandbox } from "@cloudflare/sandbox";
 
-interface ArtifactRepo {
+interface ArtifactRepoInfo {
   name?: string;
-  remote: string;
+  remote?: string;
+}
+
+interface ArtifactRepo {
+  info(): Promise<ArtifactRepoInfo>;
   createToken(scope: "write", ttl: number): Promise<{ plaintext: string }>;
 }
 
