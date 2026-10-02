@@ -27,5 +27,8 @@
       "binding": "STATE",
       "id": "7a5548912018497fb61082af5000f22d"
     }
-  ]
+  ],
+  "ai": {
+    "binding": "AI"
+  }
 }
