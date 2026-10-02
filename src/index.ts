@@ -51,21 +51,27 @@ export default {
     }
 
     if (request.method === "POST" && url.pathname === "/api/missions") {
+      const user = await currentUser(request, env.DB);
+      if (!user) return reply({ error: "Sign in is required" }, 401);
       const body = (await request.json()) as {
         projectId: string;
-        canonicalRepositoryName: string;
         title: string;
         objective: string;
         agentIds?: string[];
       };
+      if (!body.projectId || !body.objective) return reply({ error: "projectId and objective are required" }, 400);
+      const project = await requireProjectAccess(env.DB, user.id, body.projectId);
+      if (!project || !["owner","editor"].includes(project.role)) return reply({ error: "Project not found or build access denied" }, 403);
       const mission = await createMission(env, {
         projectId: body.projectId,
-        canonicalRepositoryName: body.canonicalRepositoryName,
-        title: body.title,
+        canonicalRepositoryName: project.repository_name,
+        title: body.title || "Project update",
         objective: body.objective,
         agentIds: body.agentIds?.length ? body.agentIds : ["agent-a", "agent-b"],
       });
       await env.STATE.put(`mission:${mission.id}`, JSON.stringify(mission));
+      await env.DB.prepare("INSERT INTO missions(id,project_id,title,objective,status,created_by_user_id) VALUES(?,?,?,?,?,?)")
+        .bind(mission.id,body.projectId,body.title||"Project update",body.objective,"planning",user.id).run();
       await Promise.all(mission.attempts.map((attempt) =>
         env.STATE.put(`attempt:${attempt.id}`, JSON.stringify({
           missionId: mission.id,
