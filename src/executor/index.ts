@@ -42,6 +42,44 @@ export default {
       return json({ ok: result.exitCode === 0, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr }, result.exitCode === 0 ? 200 : 500);
     }
 
+    if (url.pathname === "/agent-proof") {
+      try {
+        const repo = await env.ARTIFACTS.get("e2e-attempt-a");
+        const info = await repo.info();
+        if (!info.remote) throw new Error("Artifacts repository has no remote URL.");
+        const token = await repo.createToken("write", 900);
+        const sandbox = getSandbox(env.Sandbox, "agent-proof-a");
+        await sandbox.setEnvVars({
+          ARTIFACTS_GIT_REMOTE: authenticatedRemote(info.remote, token.plaintext),
+        });
+
+        const result = await sandbox.exec([
+          "cd /workspace",
+          "rm -rf agent-project",
+          "git clone \"$ARTIFACTS_GIT_REMOTE\" agent-project",
+          "cd agent-project",
+          "git config user.name 'NextGit Agent A'",
+          "git config user.email 'agent-a@nextgit.local'",
+          "printf '%s\\n' '# NextGit Agent Proof' '' 'Created by Agent A inside an isolated Cloudflare Sandbox and pushed to a Cloudflare Artifacts Attempt repository.' > E2E_AGENT_PROOF.md",
+          "git add E2E_AGENT_PROOF.md",
+          "git commit -m 'agent-a: add E2E proof'",
+          "git push origin HEAD",
+          "git rev-parse --short HEAD",
+        ].join(" && "));
+
+        return json({
+          ok: result.exitCode === 0,
+          agent: "agent-a",
+          repository: "e2e-attempt-a",
+          exitCode: result.exitCode,
+          stdout: result.stdout,
+          stderr: result.stderr,
+        }, result.exitCode === 0 ? 200 : 500);
+      } catch (error) {
+        return json({ ok: false, error: error instanceof Error ? error.message : "Agent proof failed" }, 500);
+      }
+    }
+
     if (url.pathname === "/artifacts-proof") {
       try {
         const repo = await env.ARTIFACTS.get("e2e-attempt-a");
