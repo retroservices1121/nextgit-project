@@ -40,9 +40,14 @@ export default {
     }
 
     if (request.method === "POST" && url.pathname === "/api/projects") {
-      const body = (await request.json()) as { name?: string };
+      const user = await currentUser(request, env.DB);
+      if (!user) return reply({ error: "Sign in is required" }, 401);
+      const body = (await request.json()) as { name?: string; sourceUrl?: string; branch?: string };
       if (!body.name) return reply({ error: "name is required" }, 400);
-      return reply(await createProject(env, body.name), 201);
+      if (body.sourceUrl && !/^https:\/\//i.test(body.sourceUrl)) return reply({ error: "Project link must use HTTPS" }, 400);
+      const project = await createProject(env, body.name, body.sourceUrl, body.branch);
+      await env.DB.prepare("INSERT INTO projects(id,owner_user_id,name,repository_name,visibility) VALUES(?,?,?,?,?)").bind(project.id,user.id,body.name,project.canonicalRepositoryId,"private").run();
+      return reply(project, 201);
     }
 
     if (request.method === "POST" && url.pathname === "/api/missions") {
