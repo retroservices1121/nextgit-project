@@ -15,27 +15,5 @@
       "namespace": "nextgit"
     }
   ],
-  "containers": [
-    {
-      "class_name": "AgentSandbox",
-      "scheduling_policy": "durable_object"
-    }
-  ],
-  "durable_objects": {
-    "bindings": [
-      {
-        "name": "AGENT_SANDBOX",
-        "class_name": "AgentSandbox"
-      }
-    ]
-  },
-  "vars": {
-    "AGENT_MODEL": "openai/gpt-5.2"
-  },
-  "exports": {
-    "AgentSandbox": {
-      "type": "durable-object",
-      "storage": "sqlite"
-    }
-  }
+  "vars": {}
 }
