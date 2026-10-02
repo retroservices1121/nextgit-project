@@ -1,4 +1,4 @@
-export { AgentSandbox } from "./runtime/agent-sandbox";
+export { Sandbox } from "@cloudflare/sandbox";
 
 import { createMission, createProject, executeAttempt, type Env } from "./api";
 
@@ -26,7 +26,7 @@ export default {
             repository: info.name ?? "nextgit-source",
             remoteConfigured: Boolean(info.remote),
           },
-          sandbox: Boolean(env.AGENT_SANDBOX),
+          sandbox: Boolean(env.Sandbox),
           modelConfigured: Boolean(env.AGENT_MODEL),
         });
       } catch (error) {
