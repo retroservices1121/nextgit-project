@@ -44,6 +44,115 @@ export default {
       return json({ ok: result.exitCode === 0, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr }, result.exitCode === 0 ? 200 : 500);
     }
 
+    if (request.method === "POST" && url.pathname === "/execute-attempt") {
+      try {
+        if (!env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not configured.");
+        const body = await request.json() as {
+          runId?: string;
+          attemptId?: string;
+          repositoryName?: string;
+          agentId?: string;
+          objective?: string;
+        };
+        if (!body.runId || !body.attemptId || !body.repositoryName || !body.agentId || !body.objective) {
+          return json({ ok: false, error: "runId, attemptId, repositoryName, agentId, and objective are required" }, 400);
+        }
+
+        const repo = await env.ARTIFACTS.get(body.repositoryName);
+        const info = await repo.info();
+        if (!info.remote) throw new Error("Artifacts repository has no remote URL.");
+        const token = await repo.createToken("write", 1800);
+        const sandbox = getSandbox(env.Sandbox, `run-${body.runId}-${body.agentId}`);
+        await sandbox.setEnvVars({
+          ARTIFACTS_GIT_REMOTE: authenticatedRemote(info.remote, token.plaintext),
+        });
+
+        const setup = await sandbox.exec([
+          "cd /workspace",
+          `rm -rf ${body.attemptId}`,
+          `git clone "$ARTIFACTS_GIT_REMOTE" ${body.attemptId}`,
+          `cd ${body.attemptId}`,
+          `git config user.name "NextGit ${body.agentId}"`,
+          `git config user.email "${body.agentId}@nextgit.local"`,
+        ].join(" && "));
+        if (setup.exitCode !== 0) {
+          return json({ ok: false, stage: "clone", stdout: setup.stdout, stderr: setup.stderr }, 500);
+        }
+
+        const root = `/workspace/${body.attemptId}`;
+        const listing = await sandbox.exec(`cd ${root} && find . -maxdepth 3 -type f -not -path './.git/*' | sort | head -160`);
+        const prompt = [
+          "You are an implementation agent in NextGit.",
+          `Agent ID: ${body.agentId}`,
+          `Mission: ${body.objective}`,
+          "Choose one useful, low-risk repository change that advances the Mission.",
+          "For this first general executor, return JSON only with keys path and content.",
+          "path must be a relative text-file path without .. and content must be the complete file contents.",
+          "Do not overwrite package manifests, lockfiles, Wrangler config, or secrets.",
+          "Repository files:",
+          listing.stdout ?? "",
+        ].join("\n");
+
+        const response = await fetch("https://api.openai.com/v1/responses", {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${env.OPENAI_API_KEY}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            model: env.AGENT_MODEL ?? "gpt-5.2",
+            input: prompt,
+            max_output_tokens: 1200,
+          }),
+        });
+        const payload = await response.json() as any;
+        if (!response.ok) {
+          return json({ ok: false, stage: "model", status: response.status, error: payload?.error?.message ?? "Model request failed" }, 500);
+        }
+        const output = payload.output_text ??
+          payload.output?.flatMap((item: any) => item.content ?? [])
+            ?.find((part: any) => part.type === "output_text")?.text;
+        if (!output) throw new Error("Model returned no text.");
+
+        let plan: { path: string; content: string };
+        try {
+          plan = JSON.parse(output);
+        } catch {
+          throw new Error("Model returned invalid JSON.");
+        }
+        const path = String(plan.path ?? "").replace(/\\/g, "/");
+        if (!path || path.startsWith("/") || path.split("/").includes("..") ||
+            /^(package(-lock)?\.json|bun\.lock|wrangler\.|\.env)/i.test(path)) {
+          throw new Error("Model selected a disallowed path.");
+        }
+
+        const encoded = btoa(unescape(encodeURIComponent(String(plan.content ?? ""))));
+        await sandbox.setEnvVars({ NEXTGIT_CONTENT_B64: encoded, NEXTGIT_TARGET: path });
+        const write = await sandbox.exec([
+          `cd ${root}`,
+          'mkdir -p "$(dirname "$NEXTGIT_TARGET")"',
+          'printf "%s" "$NEXTGIT_CONTENT_B64" | base64 -d > "$NEXTGIT_TARGET"',
+          "git add -A",
+          "git diff --cached --quiet || git commit -m 'agent: mission attempt'",
+          "git push origin HEAD",
+          "git rev-parse HEAD",
+        ].join(" && "));
+
+        return json({
+          ok: write.exitCode === 0,
+          runId: body.runId,
+          attemptId: body.attemptId,
+          agentId: body.agentId,
+          repository: body.repositoryName,
+          selectedPath: path,
+          stdout: write.stdout,
+          stderr: write.stderr,
+        }, write.exitCode === 0 ? 200 : 500);
+      } catch (error) {
+        return json({ ok: false, error: error instanceof Error ? error.message : "Attempt execution failed" }, 500);
+      }
+    }
+
     if (url.pathname === "/ai-agent-proof") {
       try {
         if (!env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not configured.");
