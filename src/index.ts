@@ -246,11 +246,31 @@ function revise(id){const f=prompt('What should this agent revise?');if(f)decide
     }
 
     if (request.method === "POST" && url.pathname === "/api/missions/plan") {
-      const body = await request.json() as { missionId?: string; objective?: string; agentIds?: string[] };
+      const body = await request.json() as { missionId?: string; objective?: string; agentIds?: string[]; projectType?: string };
       if (!body.missionId || !body.objective) return reply({ error: "missionId and objective are required" }, 400);
-      const plan = new MissionPlanner().plan({ missionId: body.missionId, objective: body.objective, agentIds: body.agentIds?.length ? body.agentIds : ["agent-a", "agent-b"] });
+      const response = await env.EXECUTOR.fetch("https://executor/plan-mission", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ objective: body.objective, projectType: body.projectType, maxWorkstreams: Math.min(body.agentIds?.length || 4, 4) }),
+      });
+      const planned = await response.json() as any;
+      if (!response.ok || !planned?.plan?.tasks?.length) {
+        const fallback = new MissionPlanner().plan({ missionId: body.missionId, objective: body.objective, agentIds: body.agentIds?.length ? body.agentIds : ["agent-a", "agent-b"] });
+        await env.STATE.put(`plan:${body.missionId}`, JSON.stringify(fallback));
+        return reply({ ok: true, plan: fallback, planner: "fallback" }, 201);
+      }
+      const agents = body.agentIds?.length ? body.agentIds : ["agent-a", "agent-b", "agent-c", "agent-d"];
+      const tasks = planned.plan.tasks.slice(0, agents.length).map((task: any, i: number) => ({
+        id: crypto.randomUUID(),
+        title: String(task.title || `Part ${i + 1}`),
+        objective: String(task.objective || body.objective),
+        agentId: agents[i],
+        mode: task.mode === "sequence" ? "sequence" : "parallel",
+        dependsOn: Array.isArray(task.dependsOn) ? task.dependsOn : [],
+      }));
+      const plan = { missionId: body.missionId, summary: String(planned.plan.summary || "NextGit created a work plan."), tasks };
       await env.STATE.put(`plan:${body.missionId}`, JSON.stringify(plan));
-      return reply({ ok: true, plan }, 201);
+      return reply({ ok: true, plan, planner: "ai" }, 201);
     }
 
     if (request.method === "POST" && url.pathname === "/api/missions/execute") {
