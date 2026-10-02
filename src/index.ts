@@ -304,12 +304,18 @@ loadReview();
     }
 
     if (request.method === "POST" && url.pathname === "/api/attempts/diff") {
-      const body = (await request.json()) as { repositoryName?: string };
-      if (!body.repositoryName) return reply({ error: "repositoryName is required" }, 400);
+      const user = await currentUser(request, env.DB);
+      if (!user) return reply({ error: "Sign in is required" }, 401);
+      const body = (await request.json()) as { missionId?: string };
+      if (!body.missionId) return reply({ error: "missionId is required" }, 400);
+      const row = await env.DB.prepare("SELECT m.id FROM missions m JOIN projects p ON p.id=m.project_id LEFT JOIN project_members pm ON pm.project_id=p.id AND pm.user_id=? WHERE m.id=? AND (p.owner_user_id=? OR pm.user_id=?)").bind(user.id,body.missionId,user.id,user.id).first<any>();
+      if (!row) return reply({ error: "Mission not found or access denied" }, 404);
+      const integration = await env.STATE.get(`integration:${body.missionId}`, "json") as any;
+      if (!integration?.repositoryName) return reply({ error: "Integrated update not found" }, 404);
       const response = await env.EXECUTOR.fetch("https://executor/diff", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ repositoryName: body.repositoryName }),
+        body: JSON.stringify({ repositoryName: integration.repositoryName }),
       });
       return new Response(response.body, { status: response.status, headers: { "content-type": "application/json" } });
     }
@@ -332,7 +338,7 @@ loadReview();
 <script>
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));let d=null;
 async function loadReview(){const missionId=new URLSearchParams(location.search).get('missionId');if(!missionId){document.getElementById('asked').textContent='No update selected.';return}const r=await fetch('/api/missions/review?missionId='+encodeURIComponent(missionId));d=await r.json();if(!r.ok){document.getElementById('asked').textContent=d.error||'Update not found.';return}document.getElementById('asked').textContent='You asked: '+d.mission.objective;const x=d.integration||{};const safe=x.finalSecurity?.passed===true;const tested=x.tests?.passed===true;const integrated=x.integrated===true;const ready=x.ready===true;document.getElementById('update').innerHTML='<h2>'+(ready?'Everything is ready':'Your update needs attention')+'</h2><p class="sub">'+(ready?'NextGit built the different parts, combined them, and checked the finished update.':'NextGit finished the work, but one of the final checks needs attention before this update should be used.')+'</p><div class="checks"><div class="check '+(integrated?'pass':'fail')+'">'+(integrated?'✓':'✕')+' Parts work together</div><div class="check '+(safe?'pass':'fail')+'">'+(safe?'✓':'✕')+' Safety check</div><div class="check '+(tested?'pass':'fail')+'">'+(tested?'✓':'✕')+' Project checks</div></div><div class="actions"><button class="btn secondary" onclick="changes()">See what changed</button><button class="btn secondary" onclick="revision()">Ask for changes</button><button class="btn primary" '+(ready?'':'disabled')+' onclick="useUpdate()">Use this update</button></div><div class="details" id="changes"></div><div class="status" id="status"></div><details><summary>Developer details</summary><pre>'+esc(JSON.stringify({integration:x},null,2))+'</pre></details>'}
-async function changes(){const e=document.getElementById('changes');e.style.display='block';e.textContent='Loading changes…';const r=await fetch('/api/attempts/diff',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({repositoryName:d.integration.repository})});const j=await r.json();e.textContent=r.ok?(j.stdout||'No changes found'):'Could not load changes'}
+async function changes(){const e=document.getElementById('changes');e.style.display='block';e.textContent='Loading changes…';const r=await fetch('/api/attempts/diff',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({missionId:d.mission.id})});const j=await r.json();e.textContent=r.ok?(j.stdout||'No changes found'):'Could not load changes'}
 function revision(){const f=prompt('What would you like changed?');if(f)document.getElementById('status').textContent='Revision request noted: '+f}
 async function useUpdate(){const e=document.getElementById('status');e.textContent='Running final checks…';const r=await fetch('/api/missions/apply',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({missionId:d.mission.id})});const j=await r.json();if(r.ok){e.innerHTML='✓ Your project has been updated. <a href="/project">Open your project</a>'}else{e.textContent='Could not apply update: '+(j.error||'Final checks failed')}}
 </script></body></html>`;
