@@ -12,7 +12,7 @@
     "deploy:executor": "wrangler deploy --config wrangler.executor.jsonc"
   },
   "dependencies": {
-    "@cloudflare/sandbox": "0.12.0",
+    "@cloudflare/sandbox": "1.0.0",
     "@mastra/core": "latest",
     "@mastra/memory": "latest",
     "zod": "latest"
