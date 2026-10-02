@@ -1,0 +1,53 @@
+# NextGit Project
+
+Working repository for an agent-native software development platform being built for Cloudflare's "What Comes After Git?" competition.
+
+> **Working title only.** Product naming is intentionally not locked yet.
+
+## Product thesis
+
+Traditional developer platforms are organized around humans manipulating branches, commits, issues, and pull requests. This project explores a different model: humans define intent and make decisions while specialized agents perform implementation, security review, testing, and analysis concurrently.
+
+### Core primitives
+
+- **Project** — canonical software product and source state.
+- **Mission** — a human-defined outcome to accomplish.
+- **Attempt** — an isolated implementation of a Mission by an agent.
+- **Finding** — a structured observation from a supervisory agent such as Security.
+- **Decision** — the human choice about an Attempt or requested remediation.
+- **Release** — accepted canonical state prepared for deployment.
+
+## Competition MVP
+
+1. Create a Project.
+2. Create a Mission.
+3. Launch multiple implementation Attempts concurrently.
+4. Keep each Attempt isolated.
+5. Continuously inspect changes with a Security Agent.
+6. Run tests/review on completed Attempts.
+7. Compare implementations and findings.
+8. Require a human Decision.
+9. Promote the accepted Attempt to canonical project state.
+10. Produce a Release.
+
+## Architecture
+
+- **Cloudflare Artifacts** — repository/versioning infrastructure.
+- **Cloudflare Workers / Durable Objects** — application, coordination, events, and state.
+- **Mastra (Apache-licensed components)** — agent/workflow orchestration.
+- **Model providers** — pluggable implementation and supervisory agents.
+
+GitHub is used to develop and publish the competition submission. It is **not** a required production dependency of the platform.
+
+## Development principles
+
+- Git is an implementation detail, not the primary user experience.
+- Agents may implement; supervisory agents inspect.
+- Security is continuous, not a final checkbox.
+- Humans retain consequential merge/release decisions.
+- Provider-specific model integrations stay replaceable.
+- Secrets never belong in source control.
+
+## Status
+
+Foundation / competition MVP under active development.
