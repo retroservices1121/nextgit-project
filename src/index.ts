@@ -1,6 +1,6 @@
 export { AgentSandbox } from "./runtime/agent-sandbox";
 
-import { createMission, createProject, type Env } from "./api";
+import { createMission, createProject, executeAttempt, type Env } from "./api";
 
 const reply = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data, null, 2), {
@@ -39,9 +39,36 @@ export default {
       }), 201);
     }
 
+    if (request.method === "POST" && url.pathname === "/api/attempts/execute") {
+      const body = (await request.json()) as {
+        attemptId: string;
+        repositoryName: string;
+        objective: string;
+        agentId: string;
+      };
+
+      if (!body.attemptId || !body.repositoryName || !body.objective || !body.agentId) {
+        return reply({ error: "Missing required Attempt execution fields" }, 400);
+      }
+
+      try {
+        return reply(await executeAttempt(env, body), 200);
+      } catch (error) {
+        return reply(
+          { error: error instanceof Error ? error.message : "Attempt execution failed" },
+          500,
+        );
+      }
+    }
+
     return reply({
       name: "NextGit Project",
-      endpoints: ["GET /health", "POST /api/projects", "POST /api/missions"],
+      endpoints: [
+        "GET /health",
+        "POST /api/projects",
+        "POST /api/missions",
+        "POST /api/attempts/execute"
+      ],
     });
   },
 };
