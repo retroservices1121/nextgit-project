@@ -11,7 +11,7 @@
     "build": "npm run typecheck"
   },
   "dependencies": {
-    "@cloudflare/sandbox": "^1.0.0",
+    "@cloudflare/sandbox": "0.12.0",
     "@mastra/core": "latest",
     "@mastra/memory": "latest",
     "zod": "latest"
