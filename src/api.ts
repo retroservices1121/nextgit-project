@@ -28,6 +28,6 @@ export async function createMission(
     agentIds: string[];
   },
 ) {
-  const service = new MissionService(new ArtifactsRepositoryService(env.ARTIFACTS));
+  const service = new MissionOrchestrator(new ArtifactsRepositoryService(env.ARTIFACTS));
   return service.launch(input);
 }
