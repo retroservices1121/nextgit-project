@@ -125,6 +125,28 @@ export default {
       return reply({ ok: true, path, type, binary: false, size: file.size, content: await file.text() });
     }
 
+    if (request.method === "POST" && url.pathname === "/api/project/explain-file") {
+      const body = await request.json() as { repositoryName?: string; path?: string };
+      if (!body.repositoryName || !body.path) return reply({ error: "repositoryName and path are required" }, 400);
+      const repo = await env.ARTIFACTS.get(body.repositoryName);
+      const file = await repo.readFile({ ref: "main", path: body.path });
+      if (!file) return reply({ error: "File not found" }, 404);
+      if (file.size > 200000) return reply({ error: "This file is too large to explain automatically." }, 413);
+      const content = await file.text();
+      const response = await env.EXECUTOR.fetch("https://executor/plan-mission", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          objective: `Explain this project file to a non-technical software builder. File: ${body.path}. Explain what it does, why the project needs it, what it connects to if evident, and what could be affected by changing it. Do not propose code changes. File contents:\n${content.slice(0, 50000)}`,
+          projectType: "file explanation",
+          maxWorkstreams: 1,
+        }),
+      });
+      const explained = await response.json() as any;
+      const task = explained?.plan?.tasks?.[0];
+      return reply({ ok: response.ok, path: body.path, explanation: task?.objective || explained?.plan?.summary || "NextGit could not explain this file yet." }, response.ok ? 200 : 502);
+    }
+
     if (request.method === "GET" && url.pathname === "/api/project/history") {
       const repositoryName = url.searchParams.get("repository");
       if (!repositoryName) return reply({ error: "repository is required" }, 400);
