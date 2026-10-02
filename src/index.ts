@@ -231,6 +231,8 @@ ${content.slice(0, 50000)}`,
     }
 
     if (request.method === "GET" && url.pathname === "/") {
+      const signedIn = await currentUser(request, env.DB);
+      if (!signedIn) return Response.redirect(new URL("/login", request.url).toString(), 302);
       const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NextGit</title>
 <style>body{font-family:ui-sans-serif,system-ui;background:#0b0d10;color:#f5f7fa;margin:0}main{max-width:920px;margin:auto;padding:54px 20px}.eyebrow{color:#8b9cff;font-weight:800}.hero{font-size:clamp(40px,8vw,78px);line-height:.95;margin:16px 0}.sub{color:#a8b0bd;font-size:18px;max-width:700px}.panel{margin-top:36px;background:#151922;border:1px solid #293041;border-radius:18px;padding:22px}.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}label{display:block;color:#a8b0bd;font-size:13px;margin:10px 0 6px}input,textarea,select{width:100%;box-sizing:border-box;background:#0d1117;color:#fff;border:1px solid #303848;border-radius:9px;padding:11px}textarea{min-height:120px}button,a.btn{display:inline-block;margin-top:16px;background:#fff;color:#111;border:0;border-radius:9px;padding:11px 16px;font-weight:800;text-decoration:none;cursor:pointer}.muted{color:#7f8998;font-size:13px}.status{white-space:pre-wrap;margin-top:14px;color:#a8b0bd;font:12px ui-monospace,monospace}@media(max-width:650px){.row{grid-template-columns:1fr}}</style></head>
 <body><main><div class="eyebrow">NEXTGIT</div><h1 class="hero">Build your idea.<br>We’ll handle the code.</h1><p class="sub">Tell NextGit what you want to build or change. We plan the work, build the pieces in parallel, check them for safety, and show you the result in plain English.</p>
