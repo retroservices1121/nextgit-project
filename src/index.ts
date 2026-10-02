@@ -84,42 +84,16 @@ export default {
     }
 
     if (request.method === "GET" && url.pathname === "/demo") {
-      const html = `<!doctype html>
-<html>
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>NextGit — Mission Review</title>
-<style>
-body{font-family:ui-sans-serif,system-ui;background:#0b0d10;color:#f5f7fa;margin:0}main{max-width:1180px;margin:auto;padding:32px 20px}.eyebrow{color:#8b9cff;font-weight:700}.sub{color:#9ca3af;max-width:780px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:24px}.card{background:#151922;border:1px solid #293041;border-radius:16px;padding:20px}.meta{font:13px ui-monospace,monospace;color:#9ca3af}.badge{display:inline-block;padding:5px 9px;border-radius:99px;background:#15351f;color:#8df0a6;font-size:12px;font-weight:700}.file{background:#0d1117;border-radius:10px;padding:12px;margin:14px 0;font:13px ui-monospace,monospace}.actions{display:flex;gap:8px;flex-wrap:wrap}button{border:0;border-radius:9px;padding:10px 13px;font-weight:700;cursor:pointer}.accept{background:#fff;color:#111}.reject,.revise{background:#252b36;color:#fff}.mission{border-left:3px solid #8b9cff;padding-left:14px}.status{margin-top:10px;color:#9ca3af;font-size:13px}@media(max-width:760px){.grid{grid-template-columns:1fr}}
-</style></head>
-<body><main>
-<div class="eyebrow">NEXTGIT / MISSION REVIEW</div>
-<h1>Two agents. Same Mission. Human decides.</h1>
-<p class="sub mission">Create a concise developer-facing artifact that explains and demonstrates NextGit's core concept: multiple AI implementation agents work independently in isolated repositories, then a human reviews the competing Attempts before accepting one.</p>
-<div class="grid">
-<section class="card"><span class="badge">SECURITY: PASS</span><h2>Alpha</h2>
-<div class="meta">3e791462 · minimal / documentation-first</div>
-<div class="file">+ docs/CONCEPT_OVERVIEW.md<br>122 insertions</div>
-<p>Focused explanation of Missions, isolated agents, Attempts, review criteria, and the acceptance flow.</p>
-<div class="actions"><button class="accept" onclick="decide('competition-demo-alpha','accept')">Accept</button><button class="reject" onclick="decide('competition-demo-alpha','reject')">Reject</button><button class="revise" onclick="revise('competition-demo-alpha')">Request revision</button></div>
-<div class="status" id="competition-demo-alpha"></div></section>
-<section class="card"><span class="badge">SECURITY: PASS</span><h2>Beta</h2>
-<div class="meta">7e350376 · product / developer-oriented</div>
-<div class="file">+ docs/CONCEPTS.md<br>109 insertions</div>
-<p>Developer-oriented “implementation tournament” explanation with workflow diagram, security gates, and human acceptance.</p>
-<div class="actions"><button class="accept" onclick="decide('competition-demo-beta','accept')">Accept</button><button class="reject" onclick="decide('competition-demo-beta','reject')">Reject</button><button class="revise" onclick="revise('competition-demo-beta')">Request revision</button></div>
-<div class="status" id="competition-demo-beta"></div></section>
-</div>
-</main>
+      const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NextGit — Mission Review</title>
+<style>body{font-family:ui-sans-serif,system-ui;background:#0b0d10;color:#f5f7fa;margin:0}main{max-width:1180px;margin:auto;padding:32px 20px}.eyebrow{color:#8b9cff;font-weight:700}.sub{color:#9ca3af;max-width:850px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:24px}.card{background:#151922;border:1px solid #293041;border-radius:16px;padding:20px}.badge{display:inline-block;padding:5px 9px;border-radius:99px;background:#15351f;color:#8df0a6;font-size:12px;font-weight:700}.file{background:#0d1117;border-radius:10px;padding:12px;margin:14px 0;font:13px ui-monospace,monospace}.preview{white-space:pre-wrap;background:#0d1117;border-radius:10px;padding:14px;max-height:260px;overflow:auto;color:#c9d1d9;font:12px ui-monospace,monospace}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}button{border:0;border-radius:9px;padding:10px 13px;font-weight:700;cursor:pointer}.accept{background:#fff}.reject,.revise{background:#252b36;color:#fff}.status{margin-top:10px;color:#9ca3af;font-size:13px}@media(max-width:760px){.grid{grid-template-columns:1fr}}</style></head>
+<body><main><div class="eyebrow">NEXTGIT / MISSION REVIEW</div><h1>Competing Attempts</h1><p class="sub" id="mission">Loading Mission…</p><div class="grid" id="attempts"></div></main>
 <script>
-async function decide(attemptId,decision,feedback){
- const el=document.getElementById(attemptId); el.textContent='Saving decision…';
- const r=await fetch('/api/decisions',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({missionId:'competition-demo',attemptId,decision,feedback})});
- const j=await r.json(); el.textContent=r.ok ? 'Decision recorded: '+decision : 'Error: '+(j.error||'unknown');
-}
-function revise(id){const feedback=prompt('What should this agent revise?');if(feedback)decide(id,'revise',feedback)}
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function load(){const d=await fetch('/api/demo/review-data').then(r=>r.json());document.getElementById('mission').textContent=d.objective;document.getElementById('attempts').innerHTML=d.attempts.map(a=>`<section class="card"><span class="badge">ARTIFACTS: LIVE</span><h2>${esc(a.agentId)}</h2><div class="file">${esc(a.path)} · ${esc(a.repositoryName)}</div><div class="preview">${esc(a.content||'No readable artifact')}</div><div class="actions"><button class="accept" onclick="decide('${a.id}','accept')">Accept</button><button class="reject" onclick="decide('${a.id}','reject')">Reject</button><button class="revise" onclick="revise('${a.id}')">Request revision</button></div><div class="status" id="${a.id}"></div></section>`).join('')}
+async function decide(id,decision,feedback){const el=document.getElementById(id);el.textContent='Saving…';const r=await fetch('/api/decisions',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({missionId:'competition-demo',attemptId:id,decision,feedback})});const j=await r.json();el.textContent=r.ok?'Decision recorded: '+decision:'Error: '+(j.error||'promotion failed')}
+function revise(id){const f=prompt('What should this agent revise?');if(f)decide(id,'revise',f)}load();
 </script></body></html>`;
-      return new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } });
+      return new Response(html,{headers:{"content-type":"text/html; charset=utf-8"}});
     }
 
     if (request.method === "GET" && url.pathname === "/api/demo/compete") {
