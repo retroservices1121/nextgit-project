@@ -164,7 +164,7 @@ const d=JSON.parse(sessionStorage.getItem('nextgit:lastMission')||'null');const 
 if(!d){document.getElementById('asked').textContent='No recent update found in this browser.'}else{document.getElementById('asked').textContent='You asked: '+d.mission.objective;const x=d.execution.integration||{};const safe=x.finalSecurity?.passed===true;const tested=x.tests?.passed===true;const integrated=x.integrated===true;const ready=x.ready===true;document.getElementById('update').innerHTML='<h2>'+(ready?'Everything is ready':'Your update needs attention')+'</h2><p class="sub">'+(ready?'NextGit built the different parts, combined them, and checked the finished update.':'NextGit finished the work, but one of the final checks needs attention before this update should be used.')+'</p><div class="checks"><div class="check '+(integrated?'pass':'fail')+'">'+(integrated?'✓':'✕')+' Parts work together</div><div class="check '+(safe?'pass':'fail')+'">'+(safe?'✓':'✕')+' Safety check</div><div class="check '+(tested?'pass':'fail')+'">'+(tested?'✓':'✕')+' Project checks</div></div><div class="actions"><button class="btn secondary" onclick="changes()">See what changed</button><button class="btn secondary" onclick="revision()">Ask for changes</button><button class="btn primary" '+(ready?'':'disabled')+' onclick="useUpdate()">Use this update</button></div><div class="details" id="changes"></div><div class="status" id="status"></div><details><summary>Developer details</summary><pre>'+esc(JSON.stringify({runId:d.execution.runId,integration:x,workstreams:d.execution.results},null,2))+'</pre></details>'}
 async function changes(){const e=document.getElementById('changes');e.style.display='block';e.textContent='Loading changes…';const r=await fetch('/api/attempts/diff',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({repositoryName:d.execution.integration.repository})});const j=await r.json();e.textContent=r.ok?(j.stdout||'No changes found'):'Could not load changes'}
 function revision(){const f=prompt('What would you like changed?');if(f)document.getElementById('status').textContent='Revision request noted: '+f}
-async function useUpdate(){document.getElementById('status').textContent='Preparing your update…';document.getElementById('status').textContent='Ready for approval flow.'}
+async function useUpdate(){const e=document.getElementById('status');e.textContent='Running final checks…';const r=await fetch('/api/missions/apply',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({missionId:d.mission.id})});const j=await r.json();e.textContent=r.ok?'✓ Your project has been updated.':'Could not apply update: '+(j.error||'Final checks failed')}
 </script></body></html>`;
       return new Response(html,{headers:{"content-type":"text/html; charset=utf-8"}});
     }
@@ -355,6 +355,39 @@ function revise(id){const f=prompt('What should this agent revise?');if(f)decide
         results,
         integration,
       }, results.every((result) => result.ok) && integration?.integrated === true ? 200 : 207);
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/missions/apply") {
+      const body = await request.json() as { missionId?: string };
+      if (!body.missionId) return reply({ error: "missionId is required" }, 400);
+      const mission = await env.STATE.get(`mission:${body.missionId}`, "json") as any;
+      const integration = await env.STATE.get(`integration:${body.missionId}`, "json") as any;
+      if (!mission || !integration?.repositoryName) return reply({ error: "Mission or integrated update could not be found." }, 404);
+
+      const freshSecurityResponse = await env.EXECUTOR.fetch("https://executor/security-scan", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ repositoryName: integration.repositoryName }),
+      });
+      const freshSecurity = await freshSecurityResponse.json() as any;
+      const freshTestsResponse = await env.EXECUTOR.fetch("https://executor/test-project", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ repositoryName: integration.repositoryName }),
+      });
+      const freshTests = await freshTestsResponse.json() as any;
+      if (!freshSecurityResponse.ok || freshSecurity?.passed !== true || !freshTestsResponse.ok || freshTests?.passed !== true) {
+        return reply({ error: "The update no longer passes final checks.", safety: freshSecurity, projectChecks: freshTests }, 409);
+      }
+
+      const decisionId = crypto.randomUUID();
+      const promote = await env.EXECUTOR.fetch("https://executor/promote", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sourceRepository: integration.repositoryName, targetRepository: mission.canonicalRepositoryName, decisionId }),
+      });
+      const promotion = await promote.json() as any;
+      if (!promote.ok) return reply({ error: "The verified update could not be applied.", promotion }, 409);
+      const applied = { missionId: body.missionId, integrationRepository: integration.repositoryName, canonicalRepository: mission.canonicalRepositoryName, decisionId, appliedAt: new Date().toISOString() };
+      await env.STATE.put(`applied:${body.missionId}`, JSON.stringify(applied));
+      return reply({ ok: true, applied, promotion }, 201);
     }
 
     if (request.method === "POST" && url.pathname === "/api/decisions") {
