@@ -15,5 +15,11 @@
       "namespace": "nextgit"
     }
   ],
-  "vars": {}
+  "vars": {},
+  "services": [
+    {
+      "binding": "EXECUTOR",
+      "service": "nextgit-executor"
+    }
+  ]
 }
