@@ -7,8 +7,9 @@
     "src/application/**/*.ts",
     "src/infrastructure/**/*.ts",
     "src/security/**/*.ts",
-    "src/agents/**/*.ts",
-    "src/runtime/**/*.ts"
+    "src/agents/**/*.ts"
   ],
-  "exclude": ["src/executor/**/*"]
+  "exclude": [
+    "src/executor/**/*"
+  ]
 }
