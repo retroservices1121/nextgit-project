@@ -12,7 +12,8 @@
   "dependencies": {
     "@cloudflare/sandbox": "^1.0.0",
     "@mastra/core": "latest",
-    "@mastra/memory": "latest"
+    "@mastra/memory": "latest",
+    "zod": "latest"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "latest",
