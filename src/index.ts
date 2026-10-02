@@ -227,8 +227,17 @@ function revise(id){const f=prompt('What should this agent revise?');if(f)decide
                 objective: body.objective,
               }),
             });
-            const result = await response.json();
-            return { attemptId: attempt.id, agentId: attempt.agentId, ok: response.ok, result };
+            const result = await response.json() as any;
+            let security: any = { ok: false, passed: false, status: "unavailable", findings: [{ severity: "high", message: "Security scan did not run." }] };
+            if (response.ok && result?.repository) {
+              const scan = await env.EXECUTOR.fetch("https://executor/security-scan", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ repositoryName: result.repository }),
+              });
+              security = await scan.json();
+            }
+            return { attemptId: attempt.id, agentId: attempt.agentId, ok: response.ok && security?.passed === true, result, security };
           } catch (error) {
             return {
               attemptId: attempt.id,
