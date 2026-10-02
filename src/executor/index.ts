@@ -44,6 +44,39 @@ export default {
       return json({ ok: result.exitCode === 0, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr }, result.exitCode === 0 ? 200 : 500);
     }
 
+    if (request.method === "POST" && url.pathname === "/plan-mission") {
+      try {
+        if (!env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not configured.");
+        const body = await request.json() as { objective?: string; projectType?: string; maxWorkstreams?: number };
+        if (!body.objective) return json({ ok: false, error: "objective is required" }, 400);
+        const max = Math.max(1, Math.min(body.maxWorkstreams ?? 4, 6));
+        const prompt = [
+          "You are the planning lead for NextGit, a software platform designed primarily for non-technical people building with AI.",
+          "Understand the user's intent. Break the request into independent implementation workstreams only when parallel work is genuinely useful.",
+          "Do not split a simple request just to use more agents.",
+          "Return JSON only with keys summary and tasks.",
+          "tasks must be an array of objects with title, objective, mode, dependsOn.",
+          "mode is parallel or sequence. dependsOn contains zero-based task indexes.",
+          `Maximum workstreams: ${max}`,
+          `Project type: ${body.projectType || "unknown software project"}`,
+          `User request: ${body.objective}`,
+        ].join("\n");
+        const response = await fetch("https://api.openai.com/v1/responses", {
+          method: "POST",
+          headers: { authorization: `Bearer ${env.OPENAI_API_KEY}`, "content-type": "application/json" },
+          body: JSON.stringify({ model: env.AGENT_MODEL ?? "gpt-5.2", input: prompt, max_output_tokens: 1200 }),
+        });
+        const payload = await response.json() as any;
+        if (!response.ok) return json({ ok: false, error: payload?.error?.message ?? "Planner model failed" }, 500);
+        const output = payload.output_text ?? payload.output?.flatMap((x: any) => x.content ?? [])?.find((x: any) => x.type === "output_text")?.text;
+        if (!output) throw new Error("Planner returned no output.");
+        const plan = JSON.parse(output);
+        return json({ ok: true, plan });
+      } catch (error) {
+        return json({ ok: false, error: error instanceof Error ? error.message : "Mission planning failed" }, 500);
+      }
+    }
+
     if (request.method === "POST" && url.pathname === "/analyze-project") {
       try {
         const body = await request.json() as { repositoryName?: string };
