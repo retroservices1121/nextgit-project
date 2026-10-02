@@ -107,6 +107,17 @@ async function launch(){const s=document.getElementById('status');s.textContent=
       return new Response(html,{headers:{"content-type":"text/html; charset=utf-8"}});
     }
 
+    if (request.method === "POST" && url.pathname === "/api/repositories/upload") {
+      const body = await request.json() as { repositoryName?: string; path?: string; contentBase64?: string; message?: string };
+      if (!body.repositoryName || !body.path || body.contentBase64 === undefined) return reply({ error: "repositoryName, path, and contentBase64 are required" }, 400);
+      const response = await env.EXECUTOR.fetch("https://executor/upload-file", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      return new Response(response.body, { status: response.status, headers: { "content-type": "application/json" } });
+    }
+
     if (request.method === "POST" && url.pathname === "/api/attempts/diff") {
       const body = (await request.json()) as { repositoryName?: string };
       if (!body.repositoryName) return reply({ error: "repositoryName is required" }, 400);
