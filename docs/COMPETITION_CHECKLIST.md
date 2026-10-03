@@ -47,13 +47,13 @@
 - [x] Rate/size limits on uploads and AI execution
 
 ## P0 — Deployment
-- [ ] Deploy tab in Project Home
-- [ ] Provider abstraction
-- [ ] One real Cloudflare deployment path
-- [ ] Deployment status + live URL
-- [ ] Deploy only approved canonical version
-- [ ] Environment/secrets handling documented and safe
-- [ ] Vercel/Railway shown only as future providers unless actually implemented
+- [x] Deploy tab in Project Home
+- [x] Provider abstraction
+- [x] One real Cloudflare deployment path
+- [x] Deployment status + live URL
+- [x] Deploy only approved canonical version
+- [x] Environment/secrets handling documented and safe
+- [x] Vercel/Railway shown only as future providers unless actually implemented
 
 ## P0 — Reliability / E2E
 - [ ] New account → new Project clean-room test
