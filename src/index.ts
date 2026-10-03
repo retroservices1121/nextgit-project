@@ -246,9 +246,13 @@ export default {
     }
 
     if (request.method === "POST" && url.pathname === "/api/project/explain-file") {
-      const body = await request.json() as { repositoryName?: string; path?: string };
-      if (!body.repositoryName || !body.path) return reply({ error: "repositoryName and path are required" }, 400);
-      const repo = await env.ARTIFACTS.get(body.repositoryName);
+      const user = await currentUser(request, env.DB);
+      if (!user) return reply({ error: "Sign in is required" }, 401);
+      const body = await request.json() as { projectId?: string; path?: string };
+      if (!body.projectId || !body.path) return reply({ error: "projectId and path are required" }, 400);
+      const project = await requireProjectAccess(env.DB, user.id, body.projectId);
+      if (!project) return reply({ error: "Project not found or access denied" }, 404);
+      const repo = await env.ARTIFACTS.get(project.repository_name);
       const file = await repo.readFile({ ref: "main", path: body.path });
       if (!file) return reply({ error: "File not found" }, 404);
       if (file.size > 200000) return reply({ error: "This file is too large to explain automatically." }, 413);
@@ -257,8 +261,7 @@ export default {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          objective: `Explain this project file to a non-technical software builder. File: ${body.path}. Explain what it does, why the project needs it, what it connects to if evident, and what could be affected by changing it. Do not propose code changes. File contents:
-${content.slice(0, 50000)}`,
+          objective: `Explain this project file to a non-technical software builder. File: ${body.path}. Explain what it does, why the project needs it, what it connects to if evident, and what could be affected by changing it. Do not propose code changes. File contents:\n${content.slice(0, 50000)}`,
           projectType: "file explanation",
           maxWorkstreams: 1,
         }),
