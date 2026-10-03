@@ -187,7 +187,7 @@ export default {
       const history = await repo.log({ ref: "main", limit: 10 });
       return reply({
         ok: true,
-        repository: { name: project.repository_name, remoteConfigured: Boolean(info.remote) },
+        repository: { remoteConfigured: Boolean(info.remote) },
         history: history.map((entry: any) => ({ hash: entry.hash, message: entry.message, author: entry.author, timestamp: entry.timestamp }))
       });
     }
