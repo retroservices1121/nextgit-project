@@ -48,6 +48,31 @@ export default {
         await Promise.all(mission.attempts.map((a:any)=>env.STATE.put(`attempt:${a.id}`,JSON.stringify({missionId:mission.id,projectId:project.id,canonicalRepositoryName:mission.canonicalRepositoryName,attemptId:a.id,agentId:a.agentId,repositoryName:a.repository.name}))));
         checks.push({ name: "Mission + isolated workspace", ok: mission.attempts.length === 1, missionId: mission.id });
 
+        const attempt = mission.attempts[0];
+        const execution = await env.EXECUTOR.fetch("https://executor/execute-attempt", {
+          method:"POST",headers:{"content-type":"application/json"},
+          body:JSON.stringify({runId,attemptId:attempt.id,repositoryName:attempt.repository.name,agentId:attempt.agentId,objective:"Add a plain text health endpoint at /health that returns ok."})
+        });
+        const executionData = await execution.json() as any;
+        checks.push({ name:"agent execution",ok:execution.ok && executionData?.ok===true });
+        const scan = await env.EXECUTOR.fetch("https://executor/security-scan",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({repositoryName:attempt.repository.name})});
+        const scanData = await scan.json() as any;
+        checks.push({ name:"per-workstream security",ok:scan.ok && scanData?.passed===true });
+
+        const integrationRepo = await new ArtifactsRepositoryService(env.ARTIFACTS).createIntegration(project.canonicalRepositoryId,mission.id);
+        const integrationResponse = await env.EXECUTOR.fetch("https://executor/integrate",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({canonicalRepository:project.canonicalRepositoryId,attemptRepositories:[attempt.repository.name],integrationRepository:integrationRepo.name})});
+        const integrationData = await integrationResponse.json() as any;
+        checks.push({ name:"integration",ok:integrationResponse.ok && integrationData?.integrated===true });
+        const finalSecurity = await env.EXECUTOR.fetch("https://executor/security-scan",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({repositoryName:integrationRepo.name})});
+        const finalSecurityData = await finalSecurity.json() as any;
+        checks.push({ name:"final security",ok:finalSecurity.ok && finalSecurityData?.passed===true });
+        const tests = await env.EXECUTOR.fetch("https://executor/test-project",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({repositoryName:integrationRepo.name})});
+        const testsData = await tests.json() as any;
+        checks.push({ name:"project checks",ok:tests.ok && testsData?.passed===true });
+        if (integrationData?.integrated===true && finalSecurityData?.passed===true && testsData?.passed===true) {
+          await env.STATE.put(`integration:${mission.id}`,JSON.stringify({repositoryName:integrationRepo.name,...integrationData,finalSecurity:finalSecurityData,tests:testsData,ready:true}));
+        }
+
         const executorHealth = await env.EXECUTOR.fetch("https://executor/health");
         checks.push({ name: "executor reachable", ok: executorHealth.ok });
         const artifactsInfo = await repo.info();
