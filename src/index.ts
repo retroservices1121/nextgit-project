@@ -590,8 +590,29 @@ function revise(id){const f=prompt('What should this agent revise?');if(f)decide
       const runId = crypto.randomUUID();
       const storedPlan = await env.STATE.get(`plan:${body.missionId}`, "json") as any;
       const executionMode = storedPlan?.decision?.execution || "parallel";
-      const executeOne = async (attempt: any) => {
+      const storedMissionForExecution = await env.STATE.get(`mission:${body.missionId}`, "json") as any;
+      const completedByIndex = new Map<number, any>();
+      const seedDependencies = async (attempt: any, index: number) => {
+        const deps = Array.isArray(storedPlan?.tasks?.[index]?.dependsOn) ? storedPlan.tasks[index].dependsOn : [];
+        if (!deps.length) return { ok: true, inherited: 0 };
+        const dependencyRepositories = deps.map((dep: number) => completedByIndex.get(dep)?.result?.repository).filter(Boolean);
+        if (dependencyRepositories.length !== deps.length) return { ok: false, error: "A required workstream did not complete successfully." };
+        const seeded = await env.EXECUTOR.fetch("https://executor/integrate", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            canonicalRepository: storedMissionForExecution.canonicalRepositoryName,
+            attemptRepositories: dependencyRepositories,
+            integrationRepository: attempt.repositoryName,
+          }),
+        });
+        const result = await seeded.json() as any;
+        return { ok: seeded.ok && result?.integrated === true, inherited: dependencyRepositories.length, result };
+      };
+      const executeOne = async (attempt: any, index = body.attempts!.findIndex((candidate: any) => candidate.id === attempt.id)) => {
           try {
+            const inheritance = await seedDependencies(attempt, index);
+            if (!inheritance.ok) return { attemptId: attempt.id, agentId: attempt.agentId, ok: false, result: { error: inheritance.error || "Dependency inheritance failed", inheritance } };
             const response = await env.EXECUTOR.fetch("https://executor/execute-attempt", {
               method: "POST",
               headers: { "content-type": "application/json" },
@@ -625,7 +646,11 @@ function revise(id){const f=prompt('What should this agent revise?');if(f)decide
         };
       let results: any[] = [];
       if (executionMode === "sequential") {
-        for (const attempt of body.attempts) results.push(await executeOne(attempt));
+        for (let i=0;i<body.attempts.length;i++) {
+          const result = await executeOne(body.attempts[i], i);
+          results.push(result);
+          if (result.ok) completedByIndex.set(i, result);
+        }
       } else if (executionMode === "mixed" && Array.isArray(storedPlan?.tasks)) {
         const remaining = body.attempts.map((attempt: any, index: number) => ({ attempt, index }));
         const completed = new Set<number>();
@@ -637,9 +662,9 @@ function revise(id){const f=prompt('What should this agent revise?');if(f)decide
           if (!ready.length) {
             return reply({ error: "The work plan contains unresolved task dependencies." }, 409);
           }
-          const batch = await Promise.all(ready.map(({ attempt }) => executeOne(attempt)));
+          const batch = await Promise.all(ready.map(({ attempt, index }) => executeOne(attempt, index)));
           results.push(...batch);
-          ready.forEach(({ index }) => completed.add(index));
+          ready.forEach(({ index }, i) => { completed.add(index); if (batch[i]?.ok) completedByIndex.set(index, batch[i]); });
           for (const item of ready) {
             const pos = remaining.findIndex((candidate) => candidate.index === item.index);
             if (pos >= 0) remaining.splice(pos, 1);
