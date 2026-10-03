@@ -4,6 +4,7 @@ import { DecisionService, type DecisionKind } from "./application/decision-servi
 import { MissionPlanner } from "./application/mission-planner";
 import { projectPage } from "./ui/project-page";
 import { currentUser, requireProjectAccess, sessionCookie } from "./application/auth";
+import { CloudflareDeploymentProvider } from "./application/deployment-provider";
 
 const reply = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data, null, 2), {
@@ -144,6 +145,35 @@ export default {
       const rows = await env.DB.prepare("SELECT DISTINCT p.id,p.name,p.repository_name,p.visibility,(SELECT COUNT(*) FROM missions m WHERE m.project_id=p.id) AS mission_count,(SELECT MAX(m.created_at) FROM missions m WHERE m.project_id=p.id) AS last_activity FROM projects p LEFT JOIN project_members pm ON pm.project_id=p.id WHERE p.owner_user_id=? OR pm.user_id=? ORDER BY COALESCE(last_activity,p.created_at) DESC").bind(user.id,user.id).all<any>();
       const cards=(rows.results||[]).map((p:any)=>`<a href="/project?id=${encodeURIComponent(p.id)}" style="display:block;background:#151922;border:1px solid #293041;border-radius:14px;padding:18px;color:#fff;text-decoration:none;margin:10px 0"><strong>${p.name}</strong><div style="color:#9ca3af;margin-top:5px">${p.visibility==='public'?'Public':'Private'} project · ${p.mission_count||0} update${Number(p.mission_count||0)===1?'':'s'}</div></a>`).join("");
       return new Response(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Your projects — NextGit</title></head><body style="font-family:system-ui;background:#0b0d10;color:#fff;margin:0"><main style="max-width:800px;margin:auto;padding:38px 20px"><div style="color:#8b9cff;font-weight:800">NEXTGIT</div><h1>Your projects</h1><p style="color:#9ca3af">Welcome, ${user.name||user.email}.</p><p><a href="/" style="color:#111;background:#fff;padding:10px 14px;border-radius:9px;text-decoration:none;font-weight:800">+ New project</a></p>${cards||'<p style="color:#9ca3af">You do not have any projects yet.</p>'}<form method="post" action="/logout"><button style="margin-top:25px">Sign out</button></form></main></body></html>`,{headers:{"content-type":"text/html; charset=utf-8"}});
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/project/deployments") {
+      const user = await currentUser(request, env.DB);
+      if (!user) return reply({ error: "Sign in is required" }, 401);
+      const projectId = url.searchParams.get("projectId");
+      if (!projectId) return reply({ error: "projectId is required" }, 400);
+      const project = await requireProjectAccess(env.DB, user.id, projectId);
+      if (!project) return reply({ error: "Project not found or access denied" }, 404);
+      const rows = await env.DB.prepare("SELECT id,provider,status,live_url,created_at,updated_at FROM deployments WHERE project_id=? ORDER BY created_at DESC LIMIT 20").bind(projectId).all<any>();
+      return reply({ ok: true, deployments: rows.results || [] });
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/project/deploy") {
+      const user = await currentUser(request, env.DB);
+      if (!user) return reply({ error: "Sign in is required" }, 401);
+      const body = await request.json() as { projectId?: string; provider?: string };
+      if (!body.projectId || body.provider !== "cloudflare") return reply({ error: "projectId and provider=cloudflare are required" }, 400);
+      const project = await requireProjectAccess(env.DB, user.id, body.projectId);
+      if (!project || !["owner","editor"].includes(project.role)) return reply({ error: "Project not found or deploy access denied" }, 403);
+      const applied = await env.DB.prepare("SELECT id FROM missions WHERE project_id=? AND status='applied' ORDER BY created_at DESC LIMIT 1").bind(body.projectId).first<any>();
+      if (!applied) return reply({ error: "Approve at least one Project update before deploying." }, 409);
+      const deploymentId = crypto.randomUUID();
+      await env.DB.prepare("INSERT INTO deployments(id,project_id,provider,status,created_by_user_id) VALUES(?,?,?,?,?)").bind(deploymentId,body.projectId,"cloudflare","deploying",user.id).run();
+      const provider = new CloudflareDeploymentProvider(env.EXECUTOR);
+      const deploymentName = ("nextgit-" + body.projectId).toLowerCase().replace(/[^a-z0-9-]/g,"-").slice(0,63);
+      const result = await provider.deploy({ projectId: body.projectId, repositoryName: project.repository_name, deploymentName });
+      await env.DB.prepare("UPDATE deployments SET status=?,live_url=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(result.ok?"ready":"failed",result.url||null,deploymentId).run();
+      return reply({ ok: result.ok, deploymentId, provider: "cloudflare", status: result.ok?"ready":"failed", url: result.url, error: result.error }, result.ok ? 201 : 409);
     }
 
     if (request.method === "GET" && url.pathname === "/api/project/info") {
