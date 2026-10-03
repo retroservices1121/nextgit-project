@@ -204,14 +204,14 @@ export default {
 
     if (request.method === "POST" && url.pathname === "/deploy-cloudflare") {
       try {
-        const body = await request.json() as { repositoryName?: string; deploymentName?: string; projectId?: string };
+        const body = await request.json() as { repositoryName?: string; deploymentName?: string; projectId?: string; cloudflareApiToken?: string; cloudflareAccountId?: string };
         if (!body.repositoryName || !body.deploymentName) return json({ ok: false, error: "repositoryName and deploymentName are required" }, 400);
         const repo = await env.ARTIFACTS.get(body.repositoryName);
         const info = await repo.info();
         if (!info.remote) throw new Error("Artifacts repository has no remote URL.");
         const token = await repo.createToken("write", 1200);
         const sandbox = getSandbox(env.Sandbox, `deploy-${body.projectId || crypto.randomUUID()}`);
-        await sandbox.setEnvVars({ ARTIFACTS_GIT_REMOTE: authenticatedRemote(info.remote, token.plaintext) });
+        await sandbox.setEnvVars({ ARTIFACTS_GIT_REMOTE: authenticatedRemote(info.remote, token.plaintext), CLOUDFLARE_API_TOKEN: body.cloudflareApiToken || "", CLOUDFLARE_ACCOUNT_ID: body.cloudflareAccountId || "" });
         const result = await sandbox.exec([
           "cd /workspace",
           "rm -rf deploy-project",
