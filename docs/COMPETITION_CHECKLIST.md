@@ -28,13 +28,13 @@
 - [ ] Return to updated Project Home
 
 ## P0 — Code hosting
-- [ ] Canonical Cloudflare Artifacts repository per Project
-- [ ] Recursive Files browser
-- [ ] Understand / Code file views
-- [ ] Human-readable Updates history
-- [ ] Developer details on demand
-- [ ] Standard Git access for authorized owner/editor
-- [ ] No arbitrary repository identifiers trusted from browser
+- [x] Canonical Cloudflare Artifacts repository per Project
+- [x] Recursive Files browser
+- [x] Understand / Code file views
+- [x] Human-readable Updates history
+- [x] Developer details on demand
+- [x] Standard Git access for authorized owner/editor
+- [x] No arbitrary repository identifiers trusted from browser
 
 ## P0 — Accounts and tenant safety
 - [ ] D1 users/projects/missions/sessions model
