@@ -169,11 +169,19 @@ export default {
       if (!applied) return reply({ error: "Approve at least one Project update before deploying." }, 409);
       const deploymentId = crypto.randomUUID();
       await env.DB.prepare("INSERT INTO deployments(id,project_id,provider,status,created_by_user_id) VALUES(?,?,?,?,?)").bind(deploymentId,body.projectId,"cloudflare","deploying",user.id).run();
+      if (!env.CLOUDFLARE_API_TOKEN || !env.CLOUDFLARE_ACCOUNT_ID) {
+        await env.DB.prepare("UPDATE deployments SET status='failed',updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(deploymentId).run();
+        return reply({ error: "Cloudflare deployment credentials are not configured for this competition environment." }, 503);
+      }
       const provider = new CloudflareDeploymentProvider(env.EXECUTOR);
       const deploymentName = ("nextgit-" + body.projectId).toLowerCase().replace(/[^a-z0-9-]/g,"-").slice(0,63);
-      const result = await provider.deploy({ projectId: body.projectId, repositoryName: project.repository_name, deploymentName });
-      await env.DB.prepare("UPDATE deployments SET status=?,live_url=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(result.ok?"ready":"failed",result.url||null,deploymentId).run();
-      return reply({ ok: result.ok, deploymentId, provider: "cloudflare", status: result.ok?"ready":"failed", url: result.url, error: result.error }, result.ok ? 201 : 409);
+      const result = await env.EXECUTOR.fetch("https://executor/deploy-cloudflare", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ projectId: body.projectId, repositoryName: project.repository_name, deploymentName, cloudflareApiToken: env.CLOUDFLARE_API_TOKEN, cloudflareAccountId: env.CLOUDFLARE_ACCOUNT_ID }),
+      }).then(async r => ({ httpOk: r.ok, ...(await r.json() as any) }));
+      await env.DB.prepare("UPDATE deployments SET status=?,live_url=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(result.httpOk&&result.ok?"ready":"failed",result.url||null,deploymentId).run();
+      return reply({ ok: result.httpOk&&result.ok, deploymentId, provider: "cloudflare", status: result.httpOk&&result.ok?"ready":"failed", url: result.url, error: result.error }, result.httpOk&&result.ok ? 201 : 409);
     }
 
     if (request.method === "GET" && url.pathname === "/api/project/info") {
