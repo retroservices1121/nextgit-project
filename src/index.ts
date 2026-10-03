@@ -692,6 +692,9 @@ function revise(id){const f=prompt('What should this agent revise?');if(f)decide
             integrationRepository: integrationRepo.name,
           }),
         }).then(async (response) => ({ httpOk: response.ok, ...(await response.json() as any) }));
+        if (integration?.integrated !== true && integration?.exitCode >= 50) {
+          integration = { ...integration, conflict: true, needsHumanReview: true, message: "NextGit could not safely combine all completed workstreams automatically." };
+        }
         let finalSecurity: any = null;
         let tests: any = null;
         if (integration?.integrated === true) {
