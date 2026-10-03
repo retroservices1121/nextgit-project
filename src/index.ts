@@ -22,6 +22,25 @@ export default {
       return reply({ ok: true, service: "nextgit-project", phase: "mission-infrastructure" });
     }
 
+    if (request.method === "GET" && url.pathname === "/api/competition/readiness") {
+      const checks: any[] = [];
+      try {
+        const db = await env.DB.prepare("SELECT (SELECT COUNT(*) FROM users) AS users,(SELECT COUNT(*) FROM projects) AS projects,(SELECT COUNT(*) FROM missions) AS missions,(SELECT COUNT(*) FROM deployments) AS deployments").first<any>();
+        checks.push({ name: "D1 application state", ok: true, detail: db });
+      } catch (error) { checks.push({ name: "D1 application state", ok: false, detail: String(error) }); }
+      try {
+        const repo = await env.ARTIFACTS.get("nextgit-source"); const info = await repo.info();
+        checks.push({ name: "Artifacts Git hosting", ok: Boolean(info.remote) });
+      } catch (error) { checks.push({ name: "Artifacts Git hosting", ok: false, detail: String(error) }); }
+      try {
+        const executor = await env.EXECUTOR.fetch("https://executor/health");
+        checks.push({ name: "Sandbox executor", ok: executor.ok });
+      } catch (error) { checks.push({ name: "Sandbox executor", ok: false, detail: String(error) }); }
+      checks.push({ name: "Workers AI binding", ok: Boolean(env.AI) });
+      checks.push({ name: "Deployment configuration", ok: Boolean(env.CLOUDFLARE_API_TOKEN && env.CLOUDFLARE_ACCOUNT_ID), detail: env.CLOUDFLARE_API_TOKEN && env.CLOUDFLARE_ACCOUNT_ID ? "configured" : "requires competition environment credentials" });
+      return reply({ ok: checks.every(c => c.ok), checks });
+    }
+
     if (request.method === "GET" && url.pathname === "/api/self-test") {
       try {
         const repo = await env.ARTIFACTS.get("nextgit-source");
