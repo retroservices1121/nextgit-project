@@ -10,6 +10,7 @@ export interface Env {
   DB: D1Database;
   CLOUDFLARE_API_TOKEN?: string;
   CLOUDFLARE_ACCOUNT_ID?: string;
+  E2E_TEST_KEY?: string;
 }
 
 export async function createProject(env: Env, name: string, sourceUrl?: string, branch?: string) {
