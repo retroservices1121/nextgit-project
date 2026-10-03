@@ -155,6 +155,26 @@ export default {
       return reply({ ok: true, project: { id: project.id, name: project.name, visibility: project.visibility, role: project.role }, stats: stats || { updates: 0, applied: 0 } });
     }
 
+    if (request.method === "POST" && url.pathname === "/api/project/token") {
+      const user = await currentUser(request, env.DB);
+      if (!user) return reply({ error: "Sign in is required" }, 401);
+      const body = await request.json() as { projectId?: string };
+      if (!body.projectId) return reply({ error: "projectId is required" }, 400);
+      const project = await requireProjectAccess(env.DB, user.id, body.projectId);
+      if (!project || !["owner","editor"].includes(project.role)) return reply({ error: "Project not found or developer access denied" }, 403);
+      const repo = await env.ARTIFACTS.get(project.repository_name);
+      const info = await repo.info();
+      if (!info.remote) return reply({ error: "Git remote is unavailable" }, 503);
+      const token = await repo.createToken("write", 3600);
+      return reply({
+        ok: true,
+        remote: info.remote,
+        token: token.plaintext,
+        expiresInSeconds: 3600,
+        warning: "This temporary credential grants Git access to this Project. Treat it like a password."
+      });
+    }
+
     if (request.method === "GET" && url.pathname === "/api/project/developer") {
       const user = await currentUser(request, env.DB);
       if (!user) return reply({ error: "Sign in is required" }, 401);
