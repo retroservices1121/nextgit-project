@@ -155,6 +155,23 @@ export default {
       return reply({ ok: true, project: { id: project.id, name: project.name, visibility: project.visibility, role: project.role }, stats: stats || { updates: 0, applied: 0 } });
     }
 
+    if (request.method === "GET" && url.pathname === "/api/project/developer") {
+      const user = await currentUser(request, env.DB);
+      if (!user) return reply({ error: "Sign in is required" }, 401);
+      const projectId = url.searchParams.get("projectId");
+      if (!projectId) return reply({ error: "projectId is required" }, 400);
+      const project = await requireProjectAccess(env.DB, user.id, projectId);
+      if (!project) return reply({ error: "Project not found or access denied" }, 404);
+      const repo = await env.ARTIFACTS.get(project.repository_name);
+      const info = await repo.info();
+      const history = await repo.log({ ref: "main", limit: 10 });
+      return reply({
+        ok: true,
+        repository: { name: project.repository_name, remoteConfigured: Boolean(info.remote) },
+        history: history.map((entry: any) => ({ hash: entry.hash, message: entry.message, author: entry.author, timestamp: entry.timestamp }))
+      });
+    }
+
     if (request.method === "GET" && url.pathname === "/api/project/updates") {
       const user = await currentUser(request, env.DB);
       if (!user) return reply({ error: "Sign in is required" }, 401);
