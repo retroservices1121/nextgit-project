@@ -144,6 +144,17 @@ export default {
       return new Response(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Your projects — NextGit</title></head><body style="font-family:system-ui;background:#0b0d10;color:#fff;margin:0"><main style="max-width:800px;margin:auto;padding:38px 20px"><div style="color:#8b9cff;font-weight:800">NEXTGIT</div><h1>Your projects</h1><p style="color:#9ca3af">Welcome, ${user.name||user.email}.</p><p><a href="/" style="color:#111;background:#fff;padding:10px 14px;border-radius:9px;text-decoration:none;font-weight:800">+ New project</a></p>${cards||'<p style="color:#9ca3af">You do not have any projects yet.</p>'}<form method="post" action="/logout"><button style="margin-top:25px">Sign out</button></form></main></body></html>`,{headers:{"content-type":"text/html; charset=utf-8"}});
     }
 
+    if (request.method === "GET" && url.pathname === "/api/project/info") {
+      const user = await currentUser(request, env.DB);
+      if (!user) return reply({ error: "Sign in is required" }, 401);
+      const projectId = url.searchParams.get("projectId");
+      if (!projectId) return reply({ error: "projectId is required" }, 400);
+      const project = await requireProjectAccess(env.DB, user.id, projectId);
+      if (!project) return reply({ error: "Project not found or access denied" }, 404);
+      const stats = await env.DB.prepare("SELECT COUNT(*) AS updates, SUM(CASE WHEN status='applied' THEN 1 ELSE 0 END) AS applied FROM missions WHERE project_id=?").bind(projectId).first<any>();
+      return reply({ ok: true, project: { id: project.id, name: project.name, visibility: project.visibility, role: project.role }, stats: stats || { updates: 0, applied: 0 } });
+    }
+
     if (request.method === "GET" && url.pathname === "/api/project/updates") {
       const user = await currentUser(request, env.DB);
       if (!user) return reply({ error: "Sign in is required" }, 401);
