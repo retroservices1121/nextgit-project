@@ -22,6 +22,47 @@ export default {
       return reply({ ok: true, service: "nextgit-project", phase: "mission-infrastructure" });
     }
 
+    if (request.method === "POST" && url.pathname === "/api/competition/e2e/run") {
+      const key = request.headers.get("x-nextgit-e2e-key");
+      if (!env.E2E_TEST_KEY || key !== env.E2E_TEST_KEY) return reply({ error: "Not found" }, 404);
+      const runId = crypto.randomUUID();
+      const userId = crypto.randomUUID();
+      const email = `competition-e2e-${runId.slice(0,8)}@example.test`;
+      const checks: any[] = [];
+      try {
+        await env.DB.prepare("INSERT INTO users(id,email,name) VALUES(?,?,?)").bind(userId,email,"Competition E2E").run();
+        checks.push({ name: "new account", ok: true });
+        const project = await createProject(env, `E2E ${runId.slice(0,8)}`);
+        await env.DB.prepare("INSERT INTO projects(id,owner_user_id,name,repository_name,visibility) VALUES(?,?,?,?,?)").bind(project.id,userId,project.name,project.canonicalRepositoryId,"private").run();
+        checks.push({ name: "new Project + canonical Artifacts repository", ok: true, projectId: project.id });
+
+        const repo = await env.ARTIFACTS.get(project.canonicalRepositoryId);
+        const cap = await repo.createToken("write", 900);
+        const upload = await env.EXECUTOR.fetch("https://executor/upload-file",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({repositoryName:project.canonicalRepositoryId,path:"wrangler.jsonc",contentBase64:btoa(JSON.stringify({name:"nextgit-e2e-app",main:"src/index.js",compatibility_date:"2026-10-03"})),message:"Add Wrangler config"})});
+        const upload2 = await env.EXECUTOR.fetch("https://executor/upload-file",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({repositoryName:project.canonicalRepositoryId,path:"src/index.js",contentBase64:btoa('export default { async fetch(){ return new Response("NextGit E2E"); } };'),message:"Add E2E Worker"})});
+        checks.push({ name: "upload Project files", ok: upload.ok && upload2.ok });
+
+        const mission = await createMission(env,{projectId:project.id,canonicalRepositoryName:project.canonicalRepositoryId,title:"E2E simple change",objective:"Add a plain text health endpoint at /health that returns ok.",agentIds:["agent-a"]});
+        await env.STATE.put(`mission:${mission.id}`,JSON.stringify(mission));
+        await env.DB.prepare("INSERT INTO missions(id,project_id,title,objective,status,created_by_user_id) VALUES(?,?,?,?,?,?)").bind(mission.id,project.id,"E2E simple change","Add a plain text health endpoint at /health that returns ok.","planning",userId).run();
+        await Promise.all(mission.attempts.map((a:any)=>env.STATE.put(`attempt:${a.id}`,JSON.stringify({missionId:mission.id,projectId:project.id,canonicalRepositoryName:mission.canonicalRepositoryName,attemptId:a.id,agentId:a.agentId,repositoryName:a.repository.name}))));
+        checks.push({ name: "Mission + isolated workspace", ok: mission.attempts.length === 1, missionId: mission.id });
+
+        const executorHealth = await env.EXECUTOR.fetch("https://executor/health");
+        checks.push({ name: "executor reachable", ok: executorHealth.ok });
+        const artifactsInfo = await repo.info();
+        checks.push({ name: "Git hosting reachable", ok: Boolean(artifactsInfo.remote) });
+
+        const result = { runId,userId,email,projectId:project.id,missionId:mission.id,checks,ok:checks.every(x=>x.ok),createdAt:new Date().toISOString() };
+        await env.STATE.put(`e2e-result:${runId}`,JSON.stringify(result),{expirationTtl:86400});
+        return reply(result,result.ok?200:207);
+      } catch(error) {
+        const result={runId,userId,email,checks,ok:false,error:error instanceof Error?error.message:String(error),createdAt:new Date().toISOString()};
+        await env.STATE.put(`e2e-result:${runId}`,JSON.stringify(result),{expirationTtl:86400});
+        return reply(result,500);
+      }
+    }
+
     if (request.method === "POST" && url.pathname === "/api/competition/e2e/start") {
       const key = request.headers.get("x-nextgit-e2e-key");
       if (!env.E2E_TEST_KEY || key !== env.E2E_TEST_KEY) return reply({ error: "Not found" }, 404);
