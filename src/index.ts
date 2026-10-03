@@ -71,6 +71,17 @@ export default {
         checks.push({ name:"project checks",ok:tests.ok && testsData?.passed===true });
         if (integrationData?.integrated===true && finalSecurityData?.passed===true && testsData?.passed===true) {
           await env.STATE.put(`integration:${mission.id}`,JSON.stringify({repositoryName:integrationRepo.name,...integrationData,finalSecurity:finalSecurityData,tests:testsData,ready:true}));
+          const decisionId = crypto.randomUUID();
+          const promote = await env.EXECUTOR.fetch("https://executor/promote",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({sourceRepository:integrationRepo.name,targetRepository:project.canonicalRepositoryId,decisionId})});
+          const promoteData = await promote.json() as any;
+          checks.push({ name:"canonical promotion",ok:promote.ok && promoteData?.ok===true });
+          if (promote.ok && promoteData?.ok===true) {
+            await env.DB.prepare("UPDATE missions SET status='applied' WHERE id=?").bind(mission.id).run();
+            const canonical = await env.ARTIFACTS.get(project.canonicalRepositoryId);
+            const healthFile = await canonical.readFile({ref:"main",path:"src/index.js"});
+            const canonicalText = healthFile ? await healthFile.text() : "";
+            checks.push({ name:"canonical changed",ok:canonicalText.includes("/health") || canonicalText.includes("health") });
+          }
         }
 
         const executorHealth = await env.EXECUTOR.fetch("https://executor/health");
