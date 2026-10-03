@@ -590,6 +590,8 @@ function revise(id){const f=prompt('What should this agent revise?');if(f)decide
       const runId = crypto.randomUUID();
       const storedPlan = await env.STATE.get(`plan:${body.missionId}`, "json") as any;
       const executionMode = storedPlan?.decision?.execution || "parallel";
+      const orchestration = { model: storedPlan?.decision?.model || "planner", execution: executionMode, riskScore: storedPlan?.decision?.riskScore, extraHumanReview: storedPlan?.decision?.extraHumanReview === true, confidence: storedPlan?.decision?.confidence };
+      await env.STATE.put(`orchestration:${body.missionId}`, JSON.stringify(orchestration));
       const storedMissionForExecution = await env.STATE.get(`mission:${body.missionId}`, "json") as any;
       const completedByIndex = new Map<number, any>();
       const seedDependencies = async (attempt: any, index: number) => {
@@ -695,7 +697,7 @@ function revise(id){const f=prompt('What should this agent revise?');if(f)decide
           finalSecurity = await env.EXECUTOR.fetch("https://executor/security-scan", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ repositoryName: integrationRepo.name }) }).then(r => r.json());
           tests = await env.EXECUTOR.fetch("https://executor/test-project", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ repositoryName: integrationRepo.name }) }).then(r => r.json());
         }
-        integration = { ...integration, finalSecurity, tests, ready: integration?.integrated === true && finalSecurity?.passed === true && tests?.passed === true };
+        integration = { ...integration, finalSecurity, tests, ready: integration?.integrated === true && finalSecurity?.passed === true && tests?.passed === true, workstreamsIntegrated: safe.length };
         await env.STATE.put(`integration:${body.missionId}`, JSON.stringify({ repositoryName: integrationRepo.name, ...integration }));
       }
 
