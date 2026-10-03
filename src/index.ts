@@ -166,13 +166,15 @@ export default {
       const info = await repo.info();
       if (!info.remote) return reply({ error: "Git remote is unavailable" }, 503);
       const token = await repo.createToken("write", 3600);
+      if (!token.plaintext) return reply({ error: "Git credential could not be created" }, 503);
+      await env.STATE.put(`git-token:${token.id || crypto.randomUUID()}`, JSON.stringify({ projectId: body.projectId, userId: user.id, createdAt: new Date().toISOString(), expiresInSeconds: 3600 }), { expirationTtl: 3700 });
       return reply({
         ok: true,
         remote: info.remote,
         token: token.plaintext,
         expiresInSeconds: 3600,
         warning: "This temporary credential grants Git access to this Project. Treat it like a password."
-      });
+      }, 201);
     }
 
     if (request.method === "GET" && url.pathname === "/api/project/developer") {
