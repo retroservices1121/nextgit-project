@@ -81,6 +81,21 @@ export default {
             const healthFile = await canonical.readFile({ref:"main",path:"src/index.js"});
             const canonicalText = healthFile ? await healthFile.text() : "";
             checks.push({ name:"canonical changed",ok:canonicalText.includes("/health") || canonicalText.includes("health") });
+            if (env.CLOUDFLARE_API_TOKEN && env.CLOUDFLARE_ACCOUNT_ID) {
+              const deploymentId = crypto.randomUUID();
+              await env.DB.prepare("INSERT INTO deployments(id,project_id,provider,status,created_by_user_id) VALUES(?,?,?,?,?)").bind(deploymentId,project.id,"cloudflare","deploying",userId).run();
+              const deploymentName = ("nextgit-e2e-" + runId.slice(0,8)).toLowerCase();
+              const deploy = await env.EXECUTOR.fetch("https://executor/deploy-cloudflare",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({projectId:project.id,repositoryName:project.canonicalRepositoryId,deploymentName,cloudflareApiToken:env.CLOUDFLARE_API_TOKEN,cloudflareAccountId:env.CLOUDFLARE_ACCOUNT_ID})});
+              const deployData = await deploy.json() as any;
+              await env.DB.prepare("UPDATE deployments SET status=?,live_url=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(deploy.ok&&deployData?.ok?"ready":"failed",deployData?.url||null,deploymentId).run();
+              checks.push({ name:"Cloudflare deployment",ok:deploy.ok&&deployData?.ok===true,deploymentId,url:deployData?.url });
+              if (deployData?.url) {
+                try { const live = await fetch(deployData.url,{redirect:"follow"}); checks.push({ name:"live URL reachable",ok:live.ok,status:live.status,url:deployData.url }); }
+                catch(error){ checks.push({ name:"live URL reachable",ok:false,detail:String(error),url:deployData.url }); }
+              }
+            } else {
+              checks.push({ name:"Cloudflare deployment",ok:false,detail:"Deployment credentials are not configured on nextgit-project." });
+            }
           }
         }
 
