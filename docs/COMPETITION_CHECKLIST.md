@@ -37,14 +37,14 @@
 - [x] No arbitrary repository identifiers trusted from browser
 
 ## P0 — Accounts and tenant safety
-- [ ] D1 users/projects/missions/sessions model
-- [ ] Project ownership
-- [ ] Owner/editor authorization on writes
-- [ ] Authorization on reads/file explanations/diffs/review
-- [ ] Mission/workspace ownership validation
-- [ ] Final apply authorization
-- [ ] Replace prototype email identity with competition-safe authentication or clearly constrain demo accounts
-- [ ] Rate/size limits on uploads and AI execution
+- [x] D1 users/projects/missions/sessions model
+- [x] Project ownership
+- [x] Owner/editor authorization on writes
+- [x] Authorization on reads/file explanations/diffs/review
+- [x] Mission/workspace ownership validation
+- [x] Final apply authorization
+- [x] Replace prototype email identity with competition-safe authentication or clearly constrain demo accounts
+- [x] Rate/size limits on uploads and AI execution
 
 ## P0 — Deployment
 - [ ] Deploy tab in Project Home
