@@ -8,6 +8,8 @@ export interface Env {
   STATE: KVNamespace;
   AI: { run(model: string, input: unknown): Promise<any> };
   DB: D1Database;
+  CLOUDFLARE_API_TOKEN?: string;
+  CLOUDFLARE_ACCOUNT_ID?: string;
 }
 
 export async function createProject(env: Env, name: string, sourceUrl?: string, branch?: string) {
