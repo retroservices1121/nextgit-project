@@ -202,6 +202,33 @@ export default {
       }
     }
 
+    if (request.method === "POST" && url.pathname === "/deploy-cloudflare") {
+      try {
+        const body = await request.json() as { repositoryName?: string; deploymentName?: string; projectId?: string };
+        if (!body.repositoryName || !body.deploymentName) return json({ ok: false, error: "repositoryName and deploymentName are required" }, 400);
+        const repo = await env.ARTIFACTS.get(body.repositoryName);
+        const info = await repo.info();
+        if (!info.remote) throw new Error("Artifacts repository has no remote URL.");
+        const token = await repo.createToken("write", 1200);
+        const sandbox = getSandbox(env.Sandbox, `deploy-${body.projectId || crypto.randomUUID()}`);
+        await sandbox.setEnvVars({ ARTIFACTS_GIT_REMOTE: authenticatedRemote(info.remote, token.plaintext) });
+        const result = await sandbox.exec([
+          "cd /workspace",
+          "rm -rf deploy-project",
+          "git clone \"$ARTIFACTS_GIT_REMOTE\" deploy-project",
+          "cd deploy-project",
+          "if [ ! -f wrangler.jsonc ] && [ ! -f wrangler.toml ] && [ ! -f wrangler.json ]; then echo 'This competition deployment path currently supports Cloudflare Worker projects with Wrangler configuration.' >&2; exit 71; fi",
+          "npm install --ignore-scripts >/tmp/deploy-install.log 2>&1 || exit 72",
+          "npx wrangler deploy --name " + body.deploymentName + " >/tmp/deploy.log 2>&1 || { cat /tmp/deploy.log >&2; exit 73; }",
+          "cat /tmp/deploy.log",
+        ].join(" && "));
+        const match = (result.stdout || "").match(/https:\/\/[^\s]+workers\.dev[^\s]*/);
+        return json({ ok: result.exitCode === 0, provider: "cloudflare", status: result.exitCode === 0 ? "ready" : "failed", url: match?.[0], exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr }, result.exitCode === 0 ? 200 : 409);
+      } catch (error) {
+        return json({ ok: false, provider: "cloudflare", status: "failed", error: error instanceof Error ? error.message : "Cloudflare deployment failed" }, 500);
+      }
+    }
+
     if (request.method === "POST" && url.pathname === "/test-project") {
       try {
         const body = await request.json() as { repositoryName?: string };
