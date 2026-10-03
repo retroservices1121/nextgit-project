@@ -14,6 +14,8 @@ const reply = (data: unknown, status = 200) =>
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    const contentLength = Number(request.headers.get("content-length") || "0");
+    if (contentLength > 8 * 1024 * 1024) return reply({ error: "Request is too large." }, 413);
 
     if (request.method === "GET" && url.pathname === "/health") {
       return reply({ ok: true, service: "nextgit-project", phase: "mission-infrastructure" });
@@ -357,6 +359,8 @@ loadReview();
       if (!user) return reply({ error: "Sign in is required" }, 401);
       const body = await request.json() as { projectId?: string; path?: string; contentBase64?: string; message?: string };
       if (!body.projectId || !body.path || body.contentBase64 === undefined) return reply({ error: "projectId, path, and contentBase64 are required" }, 400);
+      if (body.path.length > 500 || body.path.includes("..") || body.path.startsWith("/")) return reply({ error: "Invalid project file path" }, 400);
+      if (body.contentBase64.length > 7_000_000) return reply({ error: "Individual files are limited to approximately 5 MB in the competition prototype." }, 413);
       const project = await requireProjectAccess(env.DB, user.id, body.projectId);
       if (!project || !["owner","editor"].includes(project.role)) return reply({ error: "Project not found or write access denied" }, 403);
       const response = await env.EXECUTOR.fetch("https://executor/upload-file", {
@@ -610,6 +614,8 @@ function revise(id){const f=prompt('What should this agent revise?');if(f)decide
       const allowedAttempts = new Map((storedMission?.attempts || []).map((a:any) => [a.id, a.repository?.name]));
       if (body.attempts.some((a:any) => allowedAttempts.get(a.id) !== a.repositoryName)) return reply({ error: "One or more workspaces do not belong to this Mission" }, 403);
 
+      const recentRuns = await env.DB.prepare("SELECT COUNT(*) AS count FROM missions WHERE created_by_user_id=? AND created_at > datetime('now','-1 hour')").bind(user.id).first<any>();
+      if (Number(recentRuns?.count || 0) > 20) return reply({ error: "Competition prototype limit reached. Please try again later." }, 429);
       const runId = crypto.randomUUID();
       const storedPlan = await env.STATE.get(`plan:${body.missionId}`, "json") as any;
       const executionMode = storedPlan?.decision?.execution || "parallel";
