@@ -22,6 +22,30 @@ export default {
       return reply({ ok: true, service: "nextgit-project", phase: "mission-infrastructure" });
     }
 
+    if (request.method === "POST" && url.pathname === "/api/competition/e2e/start") {
+      const key = request.headers.get("x-nextgit-e2e-key");
+      if (!env.E2E_TEST_KEY || key !== env.E2E_TEST_KEY) return reply({ error: "Not found" }, 404);
+      const runId = crypto.randomUUID();
+      const email = `competition-e2e-${runId.slice(0,8)}@example.test`;
+      const userId = crypto.randomUUID();
+      await env.DB.prepare("INSERT INTO users(id,email,name) VALUES(?,?,?)").bind(userId,email,"Competition E2E").run();
+      const token = crypto.randomUUID()+crypto.randomUUID();
+      await env.DB.prepare("INSERT INTO sessions(token,user_id,expires_at) VALUES(?,?,datetime('now','+2 hours'))").bind(token,userId).run();
+      await env.STATE.put(`e2e:${runId}`, JSON.stringify({ runId, userId, email, startedAt: new Date().toISOString() }), { expirationTtl: 7200 });
+      return reply({ ok: true, runId, email, sessionToken: token }, 201);
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/competition/e2e/status") {
+      const key = request.headers.get("x-nextgit-e2e-key");
+      if (!env.E2E_TEST_KEY || key !== env.E2E_TEST_KEY) return reply({ error: "Not found" }, 404);
+      const runId = url.searchParams.get("runId");
+      if (!runId) return reply({ error: "runId is required" }, 400);
+      const run = await env.STATE.get(`e2e:${runId}`, "json") as any;
+      if (!run) return reply({ error: "E2E run not found" }, 404);
+      const counts = await env.DB.prepare("SELECT (SELECT COUNT(*) FROM projects WHERE owner_user_id=?) projects,(SELECT COUNT(*) FROM missions WHERE created_by_user_id=?) missions,(SELECT COUNT(*) FROM deployments WHERE created_by_user_id=?) deployments").bind(run.userId,run.userId,run.userId).first<any>();
+      return reply({ ok: true, run, counts });
+    }
+
     if (request.method === "GET" && url.pathname === "/api/competition/readiness") {
       const checks: any[] = [];
       try {
