@@ -495,8 +495,7 @@ async function continueWithClarification(){
  const pending=window.nextgitPending;if(!pending)return;
  const extra=document.getElementById('clarification').value.trim();if(!extra)return;
  const s=document.getElementById('status');document.getElementById('clarify').style.display='none';
- const objective=pending.original+"
-Additional detail from the user: "+extra;
+ const objective=pending.original+"\\nAdditional detail from the user: "+extra;
  document.getElementById('objective').value=objective;s.textContent='Thanks. Updating the plan…';
  const plan=await fetch('/api/missions/plan',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({missionId:pending.mission.id,objective,agentIds:pending.ids})}).then(r=>r.json());
  if(plan.requiresClarification){s.textContent=plan.message;document.getElementById('clarify').style.display='block';pending.original=objective;return}
