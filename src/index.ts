@@ -12,7 +12,102 @@ const reply = (data: unknown, status = 200) =>
     headers: { "content-type": "application/json" },
   });
 
+async function runCompetitionE2E(env: Env) {
+  const runId = crypto.randomUUID();
+  const userId = crypto.randomUUID();
+  const email = `competition-e2e-${runId.slice(0,8)}@example.test`;
+  const checks: any[] = [];
+  try {
+    await env.DB.prepare("INSERT INTO users(id,email,name) VALUES(?,?,?)").bind(userId,email,"Competition E2E").run();
+    checks.push({ name: "new account", ok: true });
+    const project = await createProject(env, `E2E ${runId.slice(0,8)}`);
+    await env.DB.prepare("INSERT INTO projects(id,owner_user_id,name,repository_name,visibility) VALUES(?,?,?,?,?)").bind(project.id,userId,project.name,project.canonicalRepositoryId,"private").run();
+    checks.push({ name: "new Project + canonical Artifacts repository", ok: true, projectId: project.id });
+
+    const repo = await env.ARTIFACTS.get(project.canonicalRepositoryId);
+    const cap = await repo.createToken("write", 900);
+    const upload = await env.EXECUTOR.fetch("https://executor/upload-file",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({repositoryName:project.canonicalRepositoryId,path:"wrangler.jsonc",contentBase64:btoa(JSON.stringify({name:"nextgit-e2e-app",main:"src/index.js",compatibility_date:"2026-10-03"})),message:"Add Wrangler config"})});
+    const upload2 = await env.EXECUTOR.fetch("https://executor/upload-file",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({repositoryName:project.canonicalRepositoryId,path:"src/index.js",contentBase64:btoa('export default { async fetch(){ return new Response("NextGit E2E"); } };'),message:"Add E2E Worker"})});
+    checks.push({ name: "upload Project files", ok: upload.ok && upload2.ok });
+
+    const mission = await createMission(env,{projectId:project.id,canonicalRepositoryName:project.canonicalRepositoryId,title:"E2E simple change",objective:"Add a plain text health endpoint at /health that returns ok.",agentIds:["agent-a"]});
+    await env.STATE.put(`mission:${mission.id}`,JSON.stringify(mission));
+    await env.DB.prepare("INSERT INTO missions(id,project_id,title,objective,status,created_by_user_id) VALUES(?,?,?,?,?,?)").bind(mission.id,project.id,"E2E simple change","Add a plain text health endpoint at /health that returns ok.","planning",userId).run();
+    await Promise.all(mission.attempts.map((a:any)=>env.STATE.put(`attempt:${a.id}`,JSON.stringify({missionId:mission.id,projectId:project.id,canonicalRepositoryName:mission.canonicalRepositoryName,attemptId:a.id,agentId:a.agentId,repositoryName:a.repository.name}))));
+    checks.push({ name: "Mission + isolated workspace", ok: mission.attempts.length === 1, missionId: mission.id });
+
+    const attempt = mission.attempts[0];
+    const execution = await env.EXECUTOR.fetch("https://executor/execute-attempt", {
+      method:"POST",headers:{"content-type":"application/json"},
+      body:JSON.stringify({runId,attemptId:attempt.id,repositoryName:attempt.repository.name,agentId:attempt.agentId,objective:"Add a plain text health endpoint at /health that returns ok."})
+    });
+    const executionData = await execution.json() as any;
+    checks.push({ name:"agent execution",ok:execution.ok && executionData?.ok===true });
+    const scan = await env.EXECUTOR.fetch("https://executor/security-scan",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({repositoryName:attempt.repository.name})});
+    const scanData = await scan.json() as any;
+    checks.push({ name:"per-workstream security",ok:scan.ok && scanData?.passed===true });
+
+    const integrationRepo = await new ArtifactsRepositoryService(env.ARTIFACTS).createIntegration(project.canonicalRepositoryId,mission.id);
+    const integrationResponse = await env.EXECUTOR.fetch("https://executor/integrate",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({canonicalRepository:project.canonicalRepositoryId,attemptRepositories:[attempt.repository.name],integrationRepository:integrationRepo.name})});
+    const integrationData = await integrationResponse.json() as any;
+    checks.push({ name:"integration",ok:integrationResponse.ok && integrationData?.integrated===true });
+    const finalSecurity = await env.EXECUTOR.fetch("https://executor/security-scan",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({repositoryName:integrationRepo.name})});
+    const finalSecurityData = await finalSecurity.json() as any;
+    checks.push({ name:"final security",ok:finalSecurity.ok && finalSecurityData?.passed===true });
+    const tests = await env.EXECUTOR.fetch("https://executor/test-project",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({repositoryName:integrationRepo.name})});
+    const testsData = await tests.json() as any;
+    checks.push({ name:"project checks",ok:tests.ok && testsData?.passed===true });
+    if (integrationData?.integrated===true && finalSecurityData?.passed===true && testsData?.passed===true) {
+      await env.STATE.put(`integration:${mission.id}`,JSON.stringify({repositoryName:integrationRepo.name,...integrationData,finalSecurity:finalSecurityData,tests:testsData,ready:true}));
+      const decisionId = crypto.randomUUID();
+      const promote = await env.EXECUTOR.fetch("https://executor/promote",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({sourceRepository:integrationRepo.name,targetRepository:project.canonicalRepositoryId,decisionId})});
+      const promoteData = await promote.json() as any;
+      checks.push({ name:"canonical promotion",ok:promote.ok && promoteData?.ok===true });
+      if (promote.ok && promoteData?.ok===true) {
+        await env.DB.prepare("UPDATE missions SET status='applied' WHERE id=?").bind(mission.id).run();
+        const canonical = await env.ARTIFACTS.get(project.canonicalRepositoryId);
+        const healthFile = await canonical.readFile({ref:"main",path:"src/index.js"});
+        const canonicalText = healthFile ? await healthFile.text() : "";
+        checks.push({ name:"canonical changed",ok:canonicalText.includes("/health") || canonicalText.includes("health") });
+        if (env.CLOUDFLARE_API_TOKEN && env.CLOUDFLARE_ACCOUNT_ID) {
+          const deploymentId = crypto.randomUUID();
+          await env.DB.prepare("INSERT INTO deployments(id,project_id,provider,status,created_by_user_id) VALUES(?,?,?,?,?)").bind(deploymentId,project.id,"cloudflare","deploying",userId).run();
+          const deploymentName = ("nextgit-e2e-" + runId.slice(0,8)).toLowerCase();
+          const deploy = await env.EXECUTOR.fetch("https://executor/deploy-cloudflare",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({projectId:project.id,repositoryName:project.canonicalRepositoryId,deploymentName,cloudflareApiToken:env.CLOUDFLARE_API_TOKEN,cloudflareAccountId:env.CLOUDFLARE_ACCOUNT_ID})});
+          const deployData = await deploy.json() as any;
+          await env.DB.prepare("UPDATE deployments SET status=?,live_url=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(deploy.ok&&deployData?.ok?"ready":"failed",deployData?.url||null,deploymentId).run();
+          checks.push({ name:"Cloudflare deployment",ok:deploy.ok&&deployData?.ok===true,deploymentId,url:deployData?.url });
+          if (deployData?.url) {
+            try { const live = await fetch(deployData.url,{redirect:"follow"}); checks.push({ name:"live URL reachable",ok:live.ok,status:live.status,url:deployData.url }); }
+            catch(error){ checks.push({ name:"live URL reachable",ok:false,detail:String(error),url:deployData.url }); }
+          }
+        } else {
+          checks.push({ name:"Cloudflare deployment",ok:false,detail:"Deployment credentials are not configured on nextgit-project." });
+        }
+      }
+    }
+
+    const executorHealth = await env.EXECUTOR.fetch("https://executor/health");
+    checks.push({ name: "executor reachable", ok: executorHealth.ok });
+    const artifactsInfo = await repo.info();
+    checks.push({ name: "Git hosting reachable", ok: Boolean(artifactsInfo.remote) });
+
+    const result = { runId,userId,email,projectId:project.id,missionId:mission.id,checks,ok:checks.every(x=>x.ok),createdAt:new Date().toISOString() };
+    await env.STATE.put(`e2e-result:${runId}`,JSON.stringify(result),{expirationTtl:86400});
+    return reply(result,result.ok?200:207);
+  } catch(error) {
+    const result={runId,userId,email,checks,ok:false,error:error instanceof Error?error.message:String(error),createdAt:new Date().toISOString()};
+    await env.STATE.put(`e2e-result:${runId}`,JSON.stringify(result),{expirationTtl:86400});
+    return reply(result,500);
+  }
+
+}
+
 export default {
+  async scheduled(controller: ScheduledController, env: Env) {
+    if (!env.E2E_TEST_KEY) return;
+    await runCompetitionE2E(env);
+  },
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const contentLength = Number(request.headers.get("content-length") || "0");
@@ -25,93 +120,7 @@ export default {
     if (request.method === "POST" && url.pathname === "/api/competition/e2e/run") {
       const key = request.headers.get("x-nextgit-e2e-key");
       if (!env.E2E_TEST_KEY || key !== env.E2E_TEST_KEY) return reply({ error: "Not found" }, 404);
-      const runId = crypto.randomUUID();
-      const userId = crypto.randomUUID();
-      const email = `competition-e2e-${runId.slice(0,8)}@example.test`;
-      const checks: any[] = [];
-      try {
-        await env.DB.prepare("INSERT INTO users(id,email,name) VALUES(?,?,?)").bind(userId,email,"Competition E2E").run();
-        checks.push({ name: "new account", ok: true });
-        const project = await createProject(env, `E2E ${runId.slice(0,8)}`);
-        await env.DB.prepare("INSERT INTO projects(id,owner_user_id,name,repository_name,visibility) VALUES(?,?,?,?,?)").bind(project.id,userId,project.name,project.canonicalRepositoryId,"private").run();
-        checks.push({ name: "new Project + canonical Artifacts repository", ok: true, projectId: project.id });
-
-        const repo = await env.ARTIFACTS.get(project.canonicalRepositoryId);
-        const cap = await repo.createToken("write", 900);
-        const upload = await env.EXECUTOR.fetch("https://executor/upload-file",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({repositoryName:project.canonicalRepositoryId,path:"wrangler.jsonc",contentBase64:btoa(JSON.stringify({name:"nextgit-e2e-app",main:"src/index.js",compatibility_date:"2026-10-03"})),message:"Add Wrangler config"})});
-        const upload2 = await env.EXECUTOR.fetch("https://executor/upload-file",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({repositoryName:project.canonicalRepositoryId,path:"src/index.js",contentBase64:btoa('export default { async fetch(){ return new Response("NextGit E2E"); } };'),message:"Add E2E Worker"})});
-        checks.push({ name: "upload Project files", ok: upload.ok && upload2.ok });
-
-        const mission = await createMission(env,{projectId:project.id,canonicalRepositoryName:project.canonicalRepositoryId,title:"E2E simple change",objective:"Add a plain text health endpoint at /health that returns ok.",agentIds:["agent-a"]});
-        await env.STATE.put(`mission:${mission.id}`,JSON.stringify(mission));
-        await env.DB.prepare("INSERT INTO missions(id,project_id,title,objective,status,created_by_user_id) VALUES(?,?,?,?,?,?)").bind(mission.id,project.id,"E2E simple change","Add a plain text health endpoint at /health that returns ok.","planning",userId).run();
-        await Promise.all(mission.attempts.map((a:any)=>env.STATE.put(`attempt:${a.id}`,JSON.stringify({missionId:mission.id,projectId:project.id,canonicalRepositoryName:mission.canonicalRepositoryName,attemptId:a.id,agentId:a.agentId,repositoryName:a.repository.name}))));
-        checks.push({ name: "Mission + isolated workspace", ok: mission.attempts.length === 1, missionId: mission.id });
-
-        const attempt = mission.attempts[0];
-        const execution = await env.EXECUTOR.fetch("https://executor/execute-attempt", {
-          method:"POST",headers:{"content-type":"application/json"},
-          body:JSON.stringify({runId,attemptId:attempt.id,repositoryName:attempt.repository.name,agentId:attempt.agentId,objective:"Add a plain text health endpoint at /health that returns ok."})
-        });
-        const executionData = await execution.json() as any;
-        checks.push({ name:"agent execution",ok:execution.ok && executionData?.ok===true });
-        const scan = await env.EXECUTOR.fetch("https://executor/security-scan",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({repositoryName:attempt.repository.name})});
-        const scanData = await scan.json() as any;
-        checks.push({ name:"per-workstream security",ok:scan.ok && scanData?.passed===true });
-
-        const integrationRepo = await new ArtifactsRepositoryService(env.ARTIFACTS).createIntegration(project.canonicalRepositoryId,mission.id);
-        const integrationResponse = await env.EXECUTOR.fetch("https://executor/integrate",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({canonicalRepository:project.canonicalRepositoryId,attemptRepositories:[attempt.repository.name],integrationRepository:integrationRepo.name})});
-        const integrationData = await integrationResponse.json() as any;
-        checks.push({ name:"integration",ok:integrationResponse.ok && integrationData?.integrated===true });
-        const finalSecurity = await env.EXECUTOR.fetch("https://executor/security-scan",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({repositoryName:integrationRepo.name})});
-        const finalSecurityData = await finalSecurity.json() as any;
-        checks.push({ name:"final security",ok:finalSecurity.ok && finalSecurityData?.passed===true });
-        const tests = await env.EXECUTOR.fetch("https://executor/test-project",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({repositoryName:integrationRepo.name})});
-        const testsData = await tests.json() as any;
-        checks.push({ name:"project checks",ok:tests.ok && testsData?.passed===true });
-        if (integrationData?.integrated===true && finalSecurityData?.passed===true && testsData?.passed===true) {
-          await env.STATE.put(`integration:${mission.id}`,JSON.stringify({repositoryName:integrationRepo.name,...integrationData,finalSecurity:finalSecurityData,tests:testsData,ready:true}));
-          const decisionId = crypto.randomUUID();
-          const promote = await env.EXECUTOR.fetch("https://executor/promote",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({sourceRepository:integrationRepo.name,targetRepository:project.canonicalRepositoryId,decisionId})});
-          const promoteData = await promote.json() as any;
-          checks.push({ name:"canonical promotion",ok:promote.ok && promoteData?.ok===true });
-          if (promote.ok && promoteData?.ok===true) {
-            await env.DB.prepare("UPDATE missions SET status='applied' WHERE id=?").bind(mission.id).run();
-            const canonical = await env.ARTIFACTS.get(project.canonicalRepositoryId);
-            const healthFile = await canonical.readFile({ref:"main",path:"src/index.js"});
-            const canonicalText = healthFile ? await healthFile.text() : "";
-            checks.push({ name:"canonical changed",ok:canonicalText.includes("/health") || canonicalText.includes("health") });
-            if (env.CLOUDFLARE_API_TOKEN && env.CLOUDFLARE_ACCOUNT_ID) {
-              const deploymentId = crypto.randomUUID();
-              await env.DB.prepare("INSERT INTO deployments(id,project_id,provider,status,created_by_user_id) VALUES(?,?,?,?,?)").bind(deploymentId,project.id,"cloudflare","deploying",userId).run();
-              const deploymentName = ("nextgit-e2e-" + runId.slice(0,8)).toLowerCase();
-              const deploy = await env.EXECUTOR.fetch("https://executor/deploy-cloudflare",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({projectId:project.id,repositoryName:project.canonicalRepositoryId,deploymentName,cloudflareApiToken:env.CLOUDFLARE_API_TOKEN,cloudflareAccountId:env.CLOUDFLARE_ACCOUNT_ID})});
-              const deployData = await deploy.json() as any;
-              await env.DB.prepare("UPDATE deployments SET status=?,live_url=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(deploy.ok&&deployData?.ok?"ready":"failed",deployData?.url||null,deploymentId).run();
-              checks.push({ name:"Cloudflare deployment",ok:deploy.ok&&deployData?.ok===true,deploymentId,url:deployData?.url });
-              if (deployData?.url) {
-                try { const live = await fetch(deployData.url,{redirect:"follow"}); checks.push({ name:"live URL reachable",ok:live.ok,status:live.status,url:deployData.url }); }
-                catch(error){ checks.push({ name:"live URL reachable",ok:false,detail:String(error),url:deployData.url }); }
-              }
-            } else {
-              checks.push({ name:"Cloudflare deployment",ok:false,detail:"Deployment credentials are not configured on nextgit-project." });
-            }
-          }
-        }
-
-        const executorHealth = await env.EXECUTOR.fetch("https://executor/health");
-        checks.push({ name: "executor reachable", ok: executorHealth.ok });
-        const artifactsInfo = await repo.info();
-        checks.push({ name: "Git hosting reachable", ok: Boolean(artifactsInfo.remote) });
-
-        const result = { runId,userId,email,projectId:project.id,missionId:mission.id,checks,ok:checks.every(x=>x.ok),createdAt:new Date().toISOString() };
-        await env.STATE.put(`e2e-result:${runId}`,JSON.stringify(result),{expirationTtl:86400});
-        return reply(result,result.ok?200:207);
-      } catch(error) {
-        const result={runId,userId,email,checks,ok:false,error:error instanceof Error?error.message:String(error),createdAt:new Date().toISOString()};
-        await env.STATE.put(`e2e-result:${runId}`,JSON.stringify(result),{expirationTtl:86400});
-        return reply(result,500);
-      }
+      return runCompetitionE2E(env);
     }
 
     if (request.method === "POST" && url.pathname === "/api/competition/e2e/start") {
