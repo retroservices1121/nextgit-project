@@ -104,9 +104,9 @@ async function runCompetitionE2E(env: Env) {
 }
 
 export default {
-  async scheduled(controller: ScheduledController, env: Env) {
+  async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext) {
     if (!env.E2E_TEST_KEY) return;
-    await runCompetitionE2E(env);
+    ctx.waitUntil(runCompetitionE2E(env));
   },
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
