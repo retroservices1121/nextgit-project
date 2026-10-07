@@ -319,7 +319,7 @@ export default {
 
         const sourceToken = await source.createToken("write", 900);
         const targetToken = await target.createToken("write", 900);
-        const sandbox = getSandbox(env.Sandbox, `promotion-${body.decisionId}`);
+        const sandbox = getSandbox(env.Sandbox, `promotion-${crypto.randomUUID()}`);
         await sandbox.setEnvVars({
           SOURCE_REMOTE: authenticatedRemote(sourceInfo.remote, sourceToken.plaintext),
           TARGET_REMOTE: authenticatedRemote(targetInfo.remote, targetToken.plaintext),
@@ -332,7 +332,7 @@ export default {
           "cd promotion-project",
           "git remote add canonical \"$TARGET_REMOTE\"",
           "git fetch canonical main",
-          "git merge-base --is-ancestor canonical/main HEAD",
+          "git merge-base --is-ancestor canonical/main HEAD || { echo 'Canonical has diverged; refusing non-fast-forward promotion' >&2; false; }",
           "git push canonical HEAD:main",
           "git rev-parse HEAD",
         ].join(" && "));
