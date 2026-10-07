@@ -149,7 +149,7 @@ export default {
         const info = await repo.info();
         if (!info.remote) throw new Error("Artifacts repository has no remote URL.");
         const token = await repo.createToken("write", 600);
-        const sandbox = getSandbox(env.Sandbox, `security-${body.repositoryName}`);
+        const sandbox = getSandbox(env.Sandbox, `security-${crypto.randomUUID()}`);
         await sandbox.setEnvVars({ ARTIFACTS_GIT_REMOTE: authenticatedRemote(info.remote, token.plaintext) });
         const result = await sandbox.exec([
           "cd /workspace",
@@ -159,9 +159,9 @@ export default {
           "BASE=$(git rev-parse HEAD^ 2>/dev/null || true)",
           "FILES=$(git diff --name-only \"$BASE\" HEAD 2>/dev/null || git show --pretty='' --name-only HEAD)",
           "git diff \"$BASE\" HEAD 2>/dev/null > /tmp/nextgit.diff || git show --format= --patch HEAD > /tmp/nextgit.diff",
-          "grep -En '(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|AKIA[0-9A-Z]{16}|sk-[A-Za-z0-9_-]{20,}|password[[:space:]]*[:=][[:space:]]*[^[:space:]]+)' /tmp/nextgit.diff >/tmp/secret-findings 2>/dev/null && exit 42 || true",
-          "printf '%s\\n' \"$FILES\" | grep -Eq '(^|/)([.]env($|[.])|id_rsa|id_ed25519|credentials[.]json)$' && exit 43 || true",
-          "exit 0",
+          "if grep -En '(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|AKIA[0-9A-Z]{16}|sk-[A-Za-z0-9_-]{20,}|password[[:space:]]*[:=][[:space:]]*[^[:space:]]+)' /tmp/nextgit.diff >/tmp/secret-findings 2>/dev/null; then exit 42; fi",
+          "if printf '%s\\n' \"$FILES\" | grep -Eq '(^|/)([.]env($|[.])|id_rsa|id_ed25519|credentials[.]json)$'; then exit 43; fi",
+          "echo NEXTGIT_SECURITY_SCAN_COMPLETE",
         ].join("\n"));
         const passed = result.exitCode === 0;
         return json({
