@@ -106,6 +106,9 @@ async function runCompetitionE2E(env: Env) {
 export default {
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext) {
     if (!env.E2E_TEST_KEY) return;
+    const armed = await env.STATE.get("competition:e2e:armed");
+    if (armed !== "1") return;
+    await env.STATE.delete("competition:e2e:armed");
     ctx.waitUntil(runCompetitionE2E(env));
   },
   async fetch(request: Request, env: Env): Promise<Response> {
