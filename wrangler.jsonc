@@ -37,5 +37,10 @@
       "database_name": "nextgit-app",
       "database_id": "c54b4f4a-090b-481b-801e-3f20e16092aa"
     }
-  ]
+  ],
+  "triggers": {
+    "crons": [
+      "*/1 * * * *"
+    ]
+  }
 }
