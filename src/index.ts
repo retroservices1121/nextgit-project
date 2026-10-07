@@ -28,7 +28,9 @@ async function runCompetitionE2E(env: Env) {
     const cap = await repo.createToken("write", 900);
     const upload = await env.EXECUTOR.fetch("https://executor/upload-file",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({repositoryName:project.canonicalRepositoryId,path:"wrangler.jsonc",contentBase64:btoa(JSON.stringify({name:"nextgit-e2e-app",main:"src/index.js",compatibility_date:"2026-10-03"})),message:"Add Wrangler config"})});
     const upload2 = await env.EXECUTOR.fetch("https://executor/upload-file",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({repositoryName:project.canonicalRepositoryId,path:"src/index.js",contentBase64:btoa('export default { async fetch(){ return new Response("NextGit E2E"); } };'),message:"Add E2E Worker"})});
-    checks.push({ name: "upload Project files", ok: upload.ok && upload2.ok });
+    const uploadData = await upload.json().catch(() => ({})) as any;
+    const upload2Data = await upload2.json().catch(() => ({})) as any;
+    checks.push({ name: "upload Project files", ok: upload.ok && upload2.ok, detail: { first: { status: upload.status, ...uploadData }, second: { status: upload2.status, ...upload2Data } } });
 
     const mission = await createMission(env,{projectId:project.id,canonicalRepositoryName:project.canonicalRepositoryId,title:"E2E simple change",objective:"Add a plain text health endpoint at /health that returns ok.",agentIds:["agent-a"]});
     await env.STATE.put(`mission:${mission.id}`,JSON.stringify(mission));
@@ -42,21 +44,21 @@ async function runCompetitionE2E(env: Env) {
       body:JSON.stringify({runId,attemptId:attempt.id,repositoryName:attempt.repository.name,agentId:attempt.agentId,objective:"Add a plain text health endpoint at /health that returns ok."})
     });
     const executionData = await execution.json() as any;
-    checks.push({ name:"agent execution",ok:execution.ok && executionData?.ok===true });
+    checks.push({ name:"agent execution",ok:execution.ok && executionData?.ok===true,status:execution.status,detail:executionData });
     const scan = await env.EXECUTOR.fetch("https://executor/security-scan",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({repositoryName:attempt.repository.name})});
     const scanData = await scan.json() as any;
-    checks.push({ name:"per-workstream security",ok:scan.ok && scanData?.passed===true });
+    checks.push({ name:"per-workstream security",ok:scan.ok && scanData?.passed===true,status:scan.status,detail:scanData });
 
     const integrationRepo = await new ArtifactsRepositoryService(env.ARTIFACTS).createIntegration(project.canonicalRepositoryId,mission.id);
     const integrationResponse = await env.EXECUTOR.fetch("https://executor/integrate",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({canonicalRepository:project.canonicalRepositoryId,attemptRepositories:[attempt.repository.name],integrationRepository:integrationRepo.name})});
     const integrationData = await integrationResponse.json() as any;
-    checks.push({ name:"integration",ok:integrationResponse.ok && integrationData?.integrated===true });
+    checks.push({ name:"integration",ok:integrationResponse.ok && integrationData?.integrated===true,status:integrationResponse.status,detail:integrationData });
     const finalSecurity = await env.EXECUTOR.fetch("https://executor/security-scan",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({repositoryName:integrationRepo.name})});
     const finalSecurityData = await finalSecurity.json() as any;
-    checks.push({ name:"final security",ok:finalSecurity.ok && finalSecurityData?.passed===true });
+    checks.push({ name:"final security",ok:finalSecurity.ok && finalSecurityData?.passed===true,status:finalSecurity.status,detail:finalSecurityData });
     const tests = await env.EXECUTOR.fetch("https://executor/test-project",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({repositoryName:integrationRepo.name})});
     const testsData = await tests.json() as any;
-    checks.push({ name:"project checks",ok:tests.ok && testsData?.passed===true });
+    checks.push({ name:"project checks",ok:tests.ok && testsData?.passed===true,status:tests.status,detail:testsData });
     if (integrationData?.integrated===true && finalSecurityData?.passed===true && testsData?.passed===true) {
       await env.STATE.put(`integration:${mission.id}`,JSON.stringify({repositoryName:integrationRepo.name,...integrationData,finalSecurity:finalSecurityData,tests:testsData,ready:true}));
       const decisionId = crypto.randomUUID();
