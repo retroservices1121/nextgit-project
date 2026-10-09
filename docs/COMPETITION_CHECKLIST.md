@@ -1,4 +1,4 @@
-# NextGit — Cloudflare Competition 100% Checklist
+# GitFlare — Cloudflare Competition 100% Checklist
 
 ## P0 — Core competition architecture
 - [ ] Dependency-aware agent inheritance: downstream workstreams start from completed dependency output, not stale canonical

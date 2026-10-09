@@ -51,7 +51,7 @@ export default {
         if (!body.objective) return json({ ok: false, error: "objective is required" }, 400);
         const max = Math.max(1, Math.min(body.maxWorkstreams ?? 4, 6));
         const prompt = [
-          "You are the planning lead for NextGit, a software platform designed primarily for non-technical people building with AI.",
+          "You are the planning lead for GitFlare, a software platform designed primarily for non-technical people building with AI.",
           "Understand the user's intent. Break the request into independent implementation workstreams only when parallel work is genuinely useful.",
           "Do not split a simple request just to use more agents.",
           "Return JSON only with keys summary and tasks.",
@@ -126,7 +126,7 @@ export default {
           "rm -rf upload-project",
           "git clone \"$ARTIFACTS_GIT_REMOTE\" upload-project",
           "cd upload-project",
-          "git config user.name 'NextGit User'",
+          "git config user.name 'GitFlare User'",
           "git config user.email 'user@nextgit.local'",
           "mkdir -p \"$(dirname \"$NEXTGIT_UPLOAD_PATH\")\"",
           "printf '%s' \"$NEXTGIT_UPLOAD_B64\" | base64 -d > \"$NEXTGIT_UPLOAD_PATH\"",
@@ -282,7 +282,7 @@ export default {
           "rm -rf integration-project",
           "git clone \"$CANONICAL_REMOTE\" integration-project",
           "cd integration-project",
-          "git config user.name 'NextGit Integration Agent'",
+          "git config user.name 'GitFlare Integration Agent'",
           "git config user.email 'integration@nextgit.local'",
         ];
         for (let i=0;i<body.attemptRepositories.length;i++) {
@@ -378,7 +378,7 @@ export default {
           `rm -rf ${body.attemptId}`,
           `git clone "$ARTIFACTS_GIT_REMOTE" ${body.attemptId}`,
           `cd ${body.attemptId}`,
-          `git config user.name "NextGit ${body.agentId}"`,
+          `git config user.name "GitFlare ${body.agentId}"`,
           `git config user.email "${body.agentId}@nextgit.local"`,
         ].join(" && "));
         if (setup.exitCode !== 0) {
@@ -388,7 +388,7 @@ export default {
         const root = `/workspace/${body.attemptId}`;
         const listing = await sandbox.exec(`cd ${root} && find . -maxdepth 3 -type f -not -path './.git/*' | sort | head -160`);
         const prompt = [
-          "You are an implementation agent in NextGit.",
+          "You are an implementation agent in GitFlare.",
           `Your implementation strategy is ${body.agentId.includes("alpha") ? "minimal and documentation-first: prefer a concise new file that explains or demonstrates the requested capability without disturbing existing code." : "product-oriented and implementation-first: prefer a useful source or documentation artifact that makes the requested capability concrete for a developer."}`,
           `Agent ID: ${body.agentId}`,
           `Mission: ${body.objective}`,
@@ -478,7 +478,7 @@ export default {
           "rm -rf ai-project",
           "git clone \"$ARTIFACTS_GIT_REMOTE\" ai-project",
           "cd ai-project",
-          "git config user.name 'NextGit AI Agent B'",
+          "git config user.name 'GitFlare AI Agent B'",
           "git config user.email 'agent-b@nextgit.local'",
         ].join(" && "));
         if (setup.exitCode !== 0) {
@@ -559,9 +559,9 @@ export default {
           "rm -rf agent-project",
           "git clone \"$ARTIFACTS_GIT_REMOTE\" agent-project",
           "cd agent-project",
-          "git config user.name 'NextGit Agent A'",
+          "git config user.name 'GitFlare Agent A'",
           "git config user.email 'agent-a@nextgit.local'",
-          "printf '%s\\n' '# NextGit Agent Proof' '' 'Created by Agent A inside an isolated Cloudflare Sandbox and pushed to a Cloudflare Artifacts Attempt repository.' > E2E_AGENT_PROOF.md",
+          "printf '%s\\n' '# GitFlare Agent Proof' '' 'Created by Agent A inside an isolated Cloudflare Sandbox and pushed to a Cloudflare Artifacts Attempt repository.' > E2E_AGENT_PROOF.md",
           "git add E2E_AGENT_PROOF.md",
           "git commit -m 'agent-a: add E2E proof'",
           "git push origin HEAD",

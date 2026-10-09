@@ -1,24 +1,42 @@
-name: Deploy Cloudflare Worker
+name: Check and deploy GitFlare
 
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, rebrand/gitflare]
+
+permissions:
+  contents: read
 
 jobs:
-  deploy:
+  check:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
       - run: npm install
-      - run: npm run typecheck
-      - run: npx wrangler deploy
+      - run: npm run build
+      - run: npm run build:executor
+      - run: npm test
+      - run: npx wrangler deploy --dry-run
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install
+      - run: npm run deploy:executor
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - run: npm run deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

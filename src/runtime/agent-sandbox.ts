@@ -70,7 +70,7 @@ export class AgentSandbox extends DurableObject<AgentSandboxEnv> {
       "chmod 700 /tmp/git-askpass.sh",
       "GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/git-askpass.sh git clone --branch \"$ARTIFACT_BRANCH\" --single-branch \"$ARTIFACT_REMOTE\" /workspace/project",
       "cd /workspace/project",
-      "git config user.name 'NextGit Agent'",
+      "git config user.name 'GitFlare Agent'",
       "git config user.email 'agent@nextgit.local'",
       "git status --short",
     ].join("\n");

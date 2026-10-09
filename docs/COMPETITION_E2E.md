@@ -1,4 +1,4 @@
-# NextGit Competition E2E Test Matrix
+# GitFlare Competition E2E Test Matrix
 
 Run against the deployed competition environment. Do not mark a scenario passed from unit/build success alone.
 
@@ -33,4 +33,4 @@ For every run capture:
 - deployment ID + live URL
 
 ## Failure rule
-A scenario is not green if a human must repair KV/D1/Artifacts state, manually alter a repository, rerun a hidden Cloudflare operation, or bypass a NextGit gate.
+A scenario is not green if a human must repair KV/D1/Artifacts state, manually alter a repository, rerun a hidden Cloudflare operation, or bypass a GitFlare gate.

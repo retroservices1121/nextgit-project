@@ -1,8 +1,10 @@
-# NextGit Project
+# GitFlare
+
+**Your code. Your agents. Your platform.**
 
 Working repository for an agent-native software development platform being built for Cloudflare's "What Comes After Git?" competition.
 
-> **Working title only.** Product naming is intentionally not locked yet.
+> GitFlare is the product name. Existing infrastructure and the `retroservices1121/nextgit-project` repository retain their current identifiers for competition compatibility.
 
 ## Product thesis
 
