@@ -14,6 +14,6 @@ Historical user-created project names, Git commits, and already-generated demo f
 
 ## Verification
 
-Run `npm install`, `npm run build`, `npm run build:executor`, `npm test`, and `npx wrangler deploy --dry-run`. The deployment workflow runs these checks before either production deployment. Route smoke tests use mocked D1 and verify rendered branding and inline JavaScript syntax; they do not replace the live competition E2E matrix.
+Run `npm install`, `npm run typecheck`, `npm run build`, `npm run build:executor`, `npm test`, and `npx wrangler deploy --dry-run`. The deployment workflow runs these checks before either production deployment. Route smoke tests use mocked D1 and verify rendered branding and inline JavaScript syntax; they do not replace the live competition E2E matrix.
 
 No trademark clearance has been performed or claimed.
