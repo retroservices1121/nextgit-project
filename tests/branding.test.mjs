@@ -81,3 +81,27 @@ test("Cloudflare resource identifiers stay intact", () => {
   assert.equal(control.d1_databases[0].database_id, "c54b4f4a-090b-481b-801e-3f20e16092aa");
   assert.equal(control.kv_namespaces[0].id, "7a5548912018497fb61082af5000f22d");
 });
+
+test("legacy demo preview is branded without changing repository identifiers", async () => {
+  const repositories = [];
+  const demoEnv = {
+    ARTIFACTS: {
+      async get(name) {
+        repositories.push(name);
+        return {
+          async info() { return { remote: "https://example.test/repository.git" }; },
+          async readFile() { return new Response("# NextGit concept\nNEXTGIT is the platform. namespace: nextgit"); }
+        };
+      }
+    }
+  };
+  const response = await worker.fetch(new Request("https://example.test/api/demo/review-data"), demoEnv);
+  const data = await response.json();
+  assert.equal(data.canonicalRepository, "nextgit-source");
+  assert.deepEqual(repositories, ["attempt-competition-demo-alpha", "attempt-competition-demo-beta"]);
+  for (const attempt of data.attempts) {
+    assert.match(attempt.content, /# GitFlare concept/);
+    assert.match(attempt.content, /namespace: nextgit/);
+    assert.doesNotMatch(attempt.content, /\bNextGit\b|\bNEXTGIT\b/);
+  }
+});
