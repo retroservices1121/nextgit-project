@@ -53,3 +53,10 @@ GitHub is used to develop and publish the competition submission. It is **not** 
 ## Status
 
 Foundation / competition MVP under active development.
+
+
+## Branding and validation
+
+GitFlare uses the tagline **Your code. Your agents. Your platform.** See [Branding compatibility](docs/BRANDING.md) for retained infrastructure identifiers and historical references, and [Demo script](docs/DEMO_SCRIPT.md) for the judging journey.
+
+Run `npm install`, `npm run typecheck`, `npm run build`, `npm run build:executor`, and `npm test`. The deployment workflow also checks the Worker bundle before deploying and verifies public branding, browser script syntax, health, and sign-in redirects afterward. These checks do not substitute for the [live competition E2E matrix](docs/COMPETITION_E2E.md).
