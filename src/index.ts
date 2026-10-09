@@ -250,7 +250,7 @@ export default {
         return {
           ...attempt,
           remoteConfigured: Boolean(info.remote),
-          content: file ? await file.text() : undefined,
+          content: file ? (await file.text()).replace(/\bNextGit\b|\bNEXTGIT\b/g, "GitFlare") : undefined,
         };
       }));
 

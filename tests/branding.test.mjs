@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { Script } from "node:vm";
-import ts from "typescript";
+import { transformSync } from "esbuild";
 
 // Load actual Worker modules without needing Cloudflare bindings for these routes.
 const cache = new Map();
@@ -12,9 +12,9 @@ function loadModule(path) {
   if (cache.has(path)) return cache.get(path).exports;
   const module = { exports: {} };
   cache.set(path, module);
-  const output = ts.transpileModule(readFileSync(path, "utf8"), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
-  }).outputText;
+  const output = transformSync(readFileSync(path, "utf8"), {
+    loader: "ts", format: "cjs", target: "es2022"
+  }).code;
   const requireLocal = specifier => {
     assert.ok(specifier.startsWith("."), "Smoke routes must use local modules");
     return loadModule(resolve(dirname(path), specifier + ".ts"));
